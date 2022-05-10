@@ -42,3 +42,6 @@ class IDataPrep(ABC):
 
     def removeCustomerWithoutGeolocationData(self)->DataFrame:pass 
 
+    def saveData(self)->None:pass 
+    
+

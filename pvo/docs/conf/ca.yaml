@@ -1,0 +1,29 @@
+# @package _group_
+# @import ../ca_config.yaml
+steps:
+  set_variables:
+    at: 
+      sales_org: 1100
+      company_code: 0526
+  load_data:
+      cooler_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/mtc/curated/CA_CAM015_CDE_Doors/{CAPS_CC}_CAM015/COMP_CODE={companyCode}/
+      sales_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/mtc/curated/CA_FSM003_Sales_Direct_Indirect/{CAPS_CC}_FSM003/SALESORG={salesOrg}/
+      customer_input_file_path : abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/input/CA_0CUS03_Customer/{CAPS_CC}_0CUS03/
+      customer_raw_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/raw/CA_0CUS03_Customer/{CAPS_CC}_0CUS03/
+      demographics_file_path: adl://cchbcaalabchg0059616dls.azuredatalakestore.net/development/test_taa/{cc}/taa_output_{cc}.csv
+      calendar_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/raw/CA_FACCAL_Calendar/CA_FACCAL/Calendar_CCH.csv
+  apply_filters:
+    customer_data: 
+     - "SALESORG IN {salesOrgLst}" 
+     - 'ACCNT_GRP IN {globalAccountGroupList}"
+     - "CUST_HIE02  IN GLOBAL_CUST_HIER2_LIST"
+                       (
+                           (f.col('_BIC_CSUP_CUST').isin(GLOBAL_ORDER_BLOCK_LIST)) | 
+                            (f.col('_BIC_CSUP_CUST').isNull())
+                       )                                                  &
+     - "_BIC_CTRADE_CH NOT IN ('099','036')"
+    -  "ERDAT AS DOUBLE <= {threeMonthsBackDate}"
+  feature_engineering: 
+  imputation:
+  join:
+  save:
