@@ -17,24 +17,42 @@ spark.sql("set spark.sql.execution.arrow.pyspark.fallback.enabled=false")
 
 class Source(ABC):
     """
-    _summary_
+    
+    The Source defines a template method that contains a skeleton of
+    pvo data processing algorithm, composed of calls to (usually) abstract primitive
+    methods.
 
-    _extended_summary_
+    Concrete subclasses should implement these operations to adapt to the needs of particular data source used in the project,
+    but leave the template method itself intact.
 
-    :param ABC: _description_
-    :type ABC: _type_
     """
     @abstractmethod 
-    def load_data(self)->None:pass 
+    def load_data(self)->None:
+        """
+        Loads the data to a pyspark dataframe
+        """
+        pass 
 
     @abstractmethod 
-    def filter_data(self)->None:pass 
+    def filter_data(self)->None:
+        """
+        Filter pyspark.DataFrame based on some business criteria defined in configuration file
+        """
+        pass 
 
     @abstractmethod 
-    def feature_engineering(self)->None:pass 
+    def feature_engineering(self)->None:
+        """
+        Creating additional features for input columns loaded to pyspark.DataFrame
+        """
+        pass 
 
     @abstractmethod 
-    def impute_nans(self)->None:pass 
+    def impute_nans(self)->None:
+        """
+        Impute Nans using using a specific strategy defined in concrete implementations
+        """
+        pass 
 
     @abstractmethod 
     def assemble(self)->DataFrame:pass
