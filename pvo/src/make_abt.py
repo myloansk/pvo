@@ -105,38 +105,30 @@ class Demographics(Source):
         to specific BU that will take part in estimating potential of each outlet 
         """
         # Convert age groups to percentages
-        #percentCols = ['age_t0014_sum', 'age_t1529_sum', 'age_t3044_sum', 'age_t4559_sum', 'age_t60pl_sum']
+
         for Col in  self.this_config['age_group_column_list']: self.demographicsDf = self.demographicsDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('pop_sum')), 2), f.lit(0)))  
 
         # Add per capita in spending
         self.demographicsDf = self.demographicsDf.withColumn('wvce_01_pc',f.expr(self.this_config['wvce_01_pc']))
         self.demographicsDf = self.demographicsDf.withColumn('wvce_02_pc',f.expr(self.this_config['wvce_02_pc']))
-        #self.demographicsDf = self.demographicsDf.withColumn('wvce_01_pc',f.col('wvce_01_sum')/f.col('pop_sum'))
-        #self.demographicsDf = self.demographicsDf.withColumn('wvce_02_pc',f.col('wvce_02_sum')/f.col('pop_sum'))
+        
 
         # Add seasonal traffic diff
         self.demographicsDf = self.demographicsDf.withColumn('TF_WINTER', f.expr(self.this_config['TF_WINTER']))
         self.demographicsDf = self.demographicsDf.withColumn('TF_SUMMER', f.expr(self.this_config['TF_SUMMER']))
-        #self.demographicsDf = self.demographicsDf.withColumn('TF_WINTER', (f.col('monthly_traffic_2021_12_mean')+f.col('monthly_traffic_2021_1_mean')+f.col('monthly_traffic_2021_2_mean'))/3 )
-        #self.demographicsDf = self.demographicsDf.withColumn('TF_SUMMER', (f.col('monthly_traffic_2021_6_mean')+f.col('monthly_traffic_2021_7_mean')+f.col('monthly_traffic_2021_8_mean'))/3 )
+        
         self.demographicsDf = self.demographicsDf.withColumn('Season_traffic_perc_diff', f.expr(self.this_config['Season_traffic_perc_diff']))
-        #self.demographicsDf = self.demographicsDf.withColumn('Season_traffic_perc_diff', f.coalesce(f.round((f.col('TF_SUMMER') - f.col('TF_WINTER'))/(f.col('TF_WINTER')),2), f.lit(0)))
 
         # Add weekend traffic diff
         self.demographicsDf = self.demographicsDf.withColumn('Weekend_traffic_perc_diff',f.expr(self.this_config['Weekend_traffic_perc_diff']))
-        #self.demographicsDf = self.demographicsDf.withColumn('Weekend_traffic_perc_diff', 
-        #                                           f.coalesce(f.round((f.col('monthly_traffic_weekend_avg_mean') - f.col('monthly_traffic_weekday_avg_mean'))/(f.col('monthly_traffic_weekday_avg_mean')),2), f.lit(0)))
-
+        
         # Convert to time of day traffic to percentages
-        #percentCols = ['monthly_traffic_morning_avg_mean', 'monthly_traffic_afternoon_avg_mean', 'monthly_traffic_evening_avg_mean', 'monthly_traffic_night_avg_mean']
         for Col in  self.this_config['traffic_hours']: self.demographicsDf = demographicsDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('monthly_traffic_avg_mean')), 2), f.lit(0)))
 
         # Add density features
         self.demographicsDf = self.demographicsDf.withColumn('population_density', f.expr(self.this_config['population_density']))
         self.demographicsDf = self.demographicsDf.withColumn('competitor_count_density', f.expr(self.this_config['competitor_count_density']) )
-        #self.demographicsDf = self.demographicsDf.withColumn('population_density', f.col('pop_sum')/(f.lit(3.14) * f.col('ta_size') * f.col('ta_size')))
-        #self.demographicsDf = self.demographicsDf.withColumn('competitor_count_density', f.col('competitor_count')/(f.lit(3.14) * f.col('ta_size') * f.col('ta_size'))) 
-
+        
     def impute_nans(self)->DataFrame:
         """
         Impute Nans on derived features using k-nn imputation strategy
