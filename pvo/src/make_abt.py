@@ -249,3 +249,115 @@ class Customer(Source):
         self.feature_engineering()
         self.impute_nans()
         return self.customerDf
+
+class Sales(Source):
+    """
+    Concrete class in which all abstract stages of Source are implemented 
+    with respect to sales data
+
+    :param Source:  parent class used as an interface in which
+                    a template method that contains a skeleton of some algorithm 
+                    composed of calls, usually to abstract primitive operations. 
+    :type Source: class
+    """
+
+    def __init__(self, parsedConfig) -> None:
+        self.salesDf:DataFrame = None 
+        self.this_config = parsedConfig 
+
+    def load_data(self)->None:
+        """
+        Load data to pyspark.DataFrame by iteratively adding a pyspark.DataFrame with
+        sales data corresponding to specific sales org to a list. 
+        In the end list is reduced to a single pyspark.DataFrame
+        """
+        dfs = []
+        for salesOrg in self.this_config['sales_org']:
+            dfs.append(spark.read.parquet(self.this_config['sales_file_path'].format(CAPS_CC = self.this_config['country_code'].upper(), salesOrg = salesOrg) ,header='true'))
+
+        self.salesDf = reduce(DataFrame.unionAll, dfs)
+    
+    def filter_data(self)->None:
+        """
+        Applying standard filters and minor trannsformation including column renaming and enrichment
+        """
+        
+        self.salesDf = self.salesDf.filter(''.join(self.this_config['filter_data_filtering_criteria_1']))
+
+        # Correct data types & rename
+        self.salesDf = (self.salesDf.withColumn('MATERIAL', f.expr(self.this_config['filter_data_MATERIAL_create']))
+                                    .withColumn('Direct_Sales_Volume_in_UC', f.expr(self.this_config['filter_data_Direct_Sales_Volume_in_UC_create']))
+                                    .withColumn('Indirect_Sales_NSR', f.expr(self.this_config['filter_data_Indirect_Sales_NSR_create']))
+                                    .withColumn('Indirect_Sales_Volume_in_UC',  f.expr(self.this_config['filter_data_Indirect_Sales_Volume_in_UC_create']))
+                                    .withColumn('Direct_Sales_NSR', f.expr(self.this_config['filter_data_Direct_Sales_NSR_create']))
+                                    .withColumnRenamed('FIELDNM005', 'CURRENCY')
+                                    .drop("FISCPER")
+            )
+    
+        # Calendar
+        calendarDf = spark.read.option("header", "true").csv(self.this_config['calendar_file_path'])
+        # Add calendar
+        self.salesDf = self.salesDf.join(calendarDf.select(*self.this_config['filter_data_calendar_selected_columns']).distinct(), on='CALDAY', how='left') 
+
+        periodLatest, numOfDays = self.salesDf.select(f.col("FISCPER"),
+                                                f.datediff(
+                                                    f.to_date(f.max(f.col("CALDAY")).over(Window().partitionBy(f.col("FISCPER"))), 'yyyyMMdd'),
+                                                    f.trunc( f.to_date(f.max(f.col("CALDAY")).over(Window().partitionBy(f.col("FISCPER"))), 'yyyyMMdd'), "month")).alias('num_of_days_passed_from_start_of_month'))\
+                                        .filter(
+                                                (f.col("num_of_days_passed_from_start_of_month").cast("integer") >20) | 
+                                                (f.col("num_of_days_passed_from_start_of_month")==0)).distinct().sort(f.col("FISCPER").desc()).limit(1).toPandas().values.flatten().tolist()
+
+
+        periodStart = (datetime.strptime(periodLatest[0:4] + '-' + periodLatest[6:7] + '-01', '%Y-%m-%d').date() - relativedelta(months=12)).strftime("%Y0%m")
+        # Filter for relevant periods
+        self.salesDf = self.salesDf.filter(self.this_config['filter_data_filtering_criteria_2'].format( periodStart = periodStart, periodLatest = periodLatest ))
+
+
+    def feature_engineering(self)->None:
+        # Finalize sales table
+        """
+        Create features corresponding to sales data that would participate in estimating the CCAF lable
+        """
+        #TODO Fix error coming from creating Sales_NSR nad Sales_Volumw_in_UC using the implementation below
+        #     error is Can't extract value from CheckOverflow((promote_precision(cast(coalesce(Direct_Sales_Volume_in_UC#4342, cast(0 as decimal(38,3))) as decimal(38,3))) 
+        #              + promote_precision(cast(coalesce(Indirect_Sales_Volume_in_UC#4383, cast(0 as decimal(38,3))) as decimal(38,3)))), DecimalType(38,3), true): 
+        #               need struct type but got decimal(38,3)
+        #self.salesDf = self.salesDf.withColumn('Sales_Volume_in_UC',f.expr(self.this_config['feature_engineering_Sales_Volume_in_UC_create']))\
+        #                        .withColumn('Sales_NSR',f.expr(self.this_config['feature_engineering_Sales_NSR_create']))\
+        #                        .select(self.this_config['feature_engineering_selected_columns'], ['Sales_Volume_in_UC','Sales_NSR'])
+        self.salesDf = (self.salesDf.select('CUSTOMER', 'CALDAY', 'FISCPER', 'MATERIAL',
+                                        f.coalesce(f.col('Direct_Sales_Volume_in_UC'), f.lit(0)) + f.coalesce(f.col('Indirect_Sales_Volume_in_UC'), f.lit(0))).alias('Sales_Volume_in_UC'),
+                                        (f.coalesce(f.col('Direct_Sales_NSR'), f.lit(0)) + f.coalesce(f.col('Indirect_Sales_NSR'), f.lit(0))).alias('Sales_NSR'),
+                                        'CURRENCY'
+                                        )
+
+        # Impute currency
+        unique_currency_df = (self.salesDf.filter(self.this_config['impute_nans_filter_1'])
+                                        .groupBy('CUSTOMER').agg(f.countDistinct('CURRENCY').alias('currency_options'), f.first('CURRENCY').alias('UNIQUE_CURRENCY'))
+                                        .filter(self.this_config['impute_nans_filter_2'])
+                                        .drop(self.this_config['impute_nans_drop_columns_list'])
+                            )
+
+        self.salesDf = (self.salesDf.join(unique_currency_df, on=self.this_config['impute_nans_join_operation']['join_on'], how=self.this_config['impute_nans_join_operation']['how'])
+                                    .withColumn('CURRENCY',f.expr(self.this_config['impute_nans_CURRENCY_create']))
+                                    .fillna('NA', subset=['CURRENCY'])
+                                    .drop(self.this_config['impute_nans_drop_column_list_v2'])
+                    )
+
+        self.salesDf = self.salesDf.withColumn("Sales_Volume_in_UC_monthly_sum", f.sum(f.col("Sales_Volume_in_UC")).over(Window().partitionBy("CUSTOMER","FISCPER")))\
+                                .withColumn("Sales_NSR_monthly_sum",f.sum(f.col("Sales_NSR")).over(Window().partitionBy("CUSTOMER","FISCPER")))
+
+        self.salesDf = self.salesDf.withColumn("Sales_Volume_in_UC_rolling_xmonths_back_avg", f.avg(f.col("Sales_Volume_in_UC_monthly_sum")).over(Window().partitionBy("CUSTOMER")))\
+                                .withColumn("Sales_NSR_rolling_xmonths_back_avg", f.avg(f.col("Sales_NSR_monthly_sum")).over(Window().partitionBy("CUSTOMER")))
+
+
+        self.salesDf = self.salesDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
+
+    def impute_nans(self)->None:pass 
+
+    def assemble(self)->DataFrame:
+        self.load_data()
+        self.filter_data()
+        self.feature_engineering()
+        self.impute_nans()
+        return self.salesDf
