@@ -192,4 +192,60 @@ class Demographics(Source):
         self.filter_data()
         self.feature_engineering()
         self.impute_nans()
-        return self.demographicsDf
+        return self.demographicsDf 
+
+class Customer(Source):
+
+    def __init__(self, config):
+        """
+        Concrete class in which all abstract stages of Source are implemented 
+        with respect to customer master data
+
+        :param Source:  parent class used as an interface in which
+                        a template method that contains a skeleton of some algorithm 
+                        composed of calls, usually to abstract primitive operations. 
+        :type Source: class
+        """
+        self.customerDf:DataFrame = None
+        self.this_config = config
+    
+    def load_data(self)->None:
+        """
+        Load data to pyspark.DataFrame from datalake
+        """
+        self.customerDf = spark.read.option("header", "true").option("sep", "|").csv(self.this_config['customer_md_file_path'])
+
+    def filter_data(self)->None:
+        """
+        Apply standard filters as it deemed appropriate by business stakeholders
+        """
+        self.customerDf = self.customerDf.filter(self.this_config['filtering_conditions'])
+
+    def feature_engineering(self)->None:
+        """
+        Create features associated with customer data including labelcol 
+        """
+        # Rename columns
+        self.customerDf = self.customerDf.select( *[ f.col(colName) for colName in self.customerDf.columns if colName not in self.this_config['rename_columns_dict']] + [f.col(key).alias(value) for key, value in self.this_config['rename_columns_dict'].items() ])
+    
+    
+        # Create additional columns
+        self.customerDf = (self.customerDf.withColumn("CUST_ROUTED", f.expr(self.this_config['CUST_ROUTED']))
+                                        .withColumn('second_digit_ccaf', f.expr(self.this_config['second_digit_ccaf']))
+                                        .withColumn('CUST_CCAF_GROUP', f.expr(self.this_config['CUST_CCAF_GROUP']))
+                    )
+    
+        # Convert long/lat to double
+        self.customerDf = self.customerDf.withColumn('LONGITUDE', f.expr(self.this_config['LONGITUDE'])).withColumn('LATITUDE', f.expr(self.this_config['LATITUDE'] ))
+    
+        #Keel only informative columns
+        self.customerDf = self.customerDf.select(*self.this_config['customer_selected_columns'])
+
+    def impute_nans(self)->None:pass 
+
+    def assemble(self)->DataFrame:
+        self.load_data()
+        self.filter_data()
+        self.feature_engineering()
+        self.impute_nans()
+        return self.customerDf
