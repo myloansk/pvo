@@ -364,8 +364,8 @@ def make_analytical_base_table(customerDF:DataFrame,
                             demographicsImputedDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
     
     # TODO Swap to inner to left 
-    abtDf = customerDF.join(demographicsImputedDf, on='CUSTOMER', how='inner')\
-                    .join(coolersDf,  on='CUSTOMER', how='inner')\
+    abtDf = customerDF.join(demographicsImputedDf, on='CUSTOMER', how='left')\
+                    .join(coolersDf,  on='CUSTOMER', how='left')\
                     .join(salesDf, on='CUSTOMER', how='left')
 
     abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",f.lit(None))
