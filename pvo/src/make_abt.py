@@ -1,20 +1,24 @@
+# Import other project dependencies
 from skeleton import Source 
 
-from abc import ABC, abstractmethod
+# Import Python Pkgs
 import pandas as pd
 import pyspark.sql.functions as f
 import pyspark.sql.types as t
 import os
 import yaml
 
-from hydra import initialize_config_module,initialize,compose,initialize_config_dir
+from abc import ABC, abstractmethod
+from hydra import (initialize_config_module,
+                    initialize,compose,initialize_config_dir)
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from pyspark.sql.window import Window
 from functools import reduce
-from pathlib import Path
-from pyspark.sql import DataFrame
 from sklearn.neighbors import BallTree, KDTree
+from pathlib import Path
+from pyspark.sql.window import Window
+from pyspark.sql import DataFrame
+from typing import List 
 from omegaconf import DictConfig
 
 spark.sql("set spark.sql.execution.arrow.pyspark.fallback.enabled=false")
@@ -353,3 +357,51 @@ class Sales(Source):
         self.feature_engineering()
         self.impute_nans()
         return self.salesDf
+
+def make_analytical_base_table(customerDF:DataFrame, 
+                            coolersDf: DataFrame, salesDf:DataFrame,
+                            demographicsImputedDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
+    
+    abtDf = customerDF.join(demographicsImputedDf, on='CUSTOMER', how='inner')\
+                    .join(coolersDf,  on='CUSTOMER', how='inner')\
+                    .join(salesDf, on='CUSTOMER', how='left')
+
+    abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",f.lit(None))
+    abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",
+                        f.coalesce(
+                                    f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double"),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy("CUST_CTRADE_CH_DESC","CUST_CDMD_AREA")),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
+                        ))
+
+    abtDf.write.mode("overwrite").saveAsTable("harry.temp_abt")
+    abtDf = spark.sql("select * from harry.temp_abt")
+
+    abtDf = abtDf.withColumn("Sales_NSR_imputed",f.lit(None))
+    abtDf = abtDf.withColumn("Sales_NSR_imputed",
+                        f.coalesce(
+                                    f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double"),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC","CUST_CDMD_AREA")),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
+                        ))
+    abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed'])
+    
+    #Filter customer MD if no coordinates or postal code
+    condition1 = (
+                    ((f.col('LONGITUDE').cast("double")!=0) | (f.col('LONGITUDE').isNotNull())) & 
+                    ((f.col('LATITUDE').cast("double")!=0)  | (f.col('LATITUDE').isNotNull()))
+                )
+    condition2 = (f.col('POSTAL_CODE').isNotNull())
+
+
+    abtDf = abtDf.filter(condition1 | condition2)
+
+    abtDf = abtDf.select(INCLUDE_COLS_LIST)
+
+    partition_date=datetime.now().strftime("%Y%m%d_%H%M%S")
+    #TODO Fix output save file path
+    abtDf.write.csv(f"/mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv", header=True)
+
+
