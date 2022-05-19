@@ -187,6 +187,7 @@ class Demographics(Source):
         self.load_data()
         self.filter_data()
         self.feature_engineering()
+        # TODO Remove impute_nans
         self.impute_nans()
         return self.demographicsDf 
 
@@ -362,6 +363,7 @@ def make_analytical_base_table(customerDF:DataFrame,
                             coolersDf: DataFrame, salesDf:DataFrame,
                             demographicsImputedDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
     
+    # TODO Swap to inner to left 
     abtDf = customerDF.join(demographicsImputedDf, on='CUSTOMER', how='inner')\
                     .join(coolersDf,  on='CUSTOMER', how='inner')\
                     .join(salesDf, on='CUSTOMER', how='left')
@@ -386,17 +388,7 @@ def make_analytical_base_table(customerDF:DataFrame,
                                     f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
                                     f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
                         ))
-    abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed'])
-    
-    #Filter customer MD if no coordinates or postal code
-    condition1 = (
-                    ((f.col('LONGITUDE').cast("double")!=0) | (f.col('LONGITUDE').isNotNull())) & 
-                    ((f.col('LATITUDE').cast("double")!=0)  | (f.col('LATITUDE').isNotNull()))
-                )
-    condition2 = (f.col('POSTAL_CODE').isNotNull())
-
-
-    abtDf = abtDf.filter(condition1 | condition2)
+    abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed']) 
 
     abtDf = abtDf.select(INCLUDE_COLS_LIST)
 

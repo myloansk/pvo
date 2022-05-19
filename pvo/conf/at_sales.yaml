@@ -1,0 +1,77 @@
+load_data:
+  sales_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/mtc/curated/CA_FSM003_Sales_Direct_Indirect/{CAPS_CC}_FSM003/SALESORG={salesOrg}/
+  calendar_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/raw/CA_FACCAL_Calendar/CA_FACCAL/Calendar_CCH.csv
+filter_data: 
+  filtering_criteria_1:
+    - CUSTOMER IS NOT NULL 
+  MATERIAL: 
+    input:
+    - MATERIAL
+    transformation:
+      CAST(CAST({field01} AS BIGINT) AS STRING) 
+  Direct_Sales_Volume_in_UC:
+    input: 
+      - FIELDNM013
+    transformation:
+      CAST({field01} AS DECIMAL(38,3))
+  Indirect_Sales_NSR:
+    input: 
+      - FIELDNM016 
+    transformation:
+      CAST({field01} AS DECIMAL(38,2))
+  Indirect_Sales_Volume_in_UC:
+    input:
+      - FIELDNM017
+    transformation:
+      CAST({field01} AS DECIMAL(38,3))
+  Direct_Sales_NSR:
+    input: 
+      - FIELDNM018
+    transformation:
+      CAST({field01} AS DECIMAL(38,2))
+  column_rename_dict: 
+    FIELDNM005: CURRENCY
+  calendar_selected_columns: 
+    - CALDAY 
+    - FISCPER 
+  filtering_criteria_2:
+    - (CAST(FISCPER AS INTEGER) >= {periodStart}) 
+    - (CAST(FISCPER AS INTEGER) <= {periodLatest})
+feature_engineering:
+  selected_column_list:
+    - CUSTOMER
+    - CALDAY
+    - FISCPER
+    - MATERIAL
+    - CURRENCY
+  Sales_Volume_in_UC:
+    input: 
+      - Direct_Sales_Volume_in_UC
+      - Indirect_Sales_Volume_in_UC
+      - Sales_Volume_in_UC
+    transformation:
+      (coalesce({field01}, CAST(0 AS DECIMAL(38,3))) + coalesce({field02}, CAST(0 AS DECIMAL(38,3)))).alias({field03})
+  Sales_NSR:
+    input: 
+      - Direct_Sales_NSR
+      - Indirect_Sales_NSR
+      - Sales_NSR
+    transformation:
+      (coalesce({field01}, CAST(0 AS DECIMAL(38,2))) + coalesce({field02}, CAST(0 AS DECIMAL(38,2)))).alias({field03})
+impute_nans: 
+  currency_unique_filtering_criteria_v1: 
+    CURRENCY IS NULL
+  currency_unique_filtering_criteria_v2: 
+    currency_options == 1
+  drop_columns_list:
+    currency_options
+  join_operation: 
+    join_on: CUSTOMER 
+    how: left
+  CURRENCY: 
+    input: 
+      - CURRENCY
+      - UNIQUE_CURRENCY 
+    transformation: 
+      coalesce({field01}, {field02})
+  drop_colums_list_v2: UNIQUE_CURRENCY
