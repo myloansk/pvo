@@ -47,12 +47,11 @@ class Cooler(Source):
         self.coolerDf = reduce(DataFrame.unionAll, dfs)
 
     def filter_data(self)->None:
-        """
-        Filter cooler data using knowledge transferred by stakeholder/business units
+        periodLatest = self.coolerDf.agg({"FISCPER": "max"}).collect()[0][0]
+        print(periodLatest)
 
-        """
         self.coolerDf = self.coolerDf.selectExpr([colExpr for colExpr in self.this_config['selected_coolers_column_list']])\
-                                    .filter(self.this_config['filtering_cooler_conditions'])
+                                    .filter(self.this_config['filtering_cooler_conditions'].format( periodLatest = periodLatest))
         # --- Remove duplicates (if exist) ---
         self.coolerDf = self.coolerDf.select(*self.this_config['output_selected_column_list']).distinct()
         
