@@ -56,12 +56,6 @@ class Cooler(Source):
         # --- Remove duplicates (if exist) ---
         self.coolerDf = self.coolerDf.select(*self.this_config['output_selected_column_list']).distinct()
         
-    def impute_nans(self)->None:
-        """
-        Impute Nans on the derived columns using 0 as agreed with business stakeholders
-
-        """
-        self.coolerDf = self.coolerDf.fillna(0, ['COOLER_DOORS_SUM', 'COOLER_EQUIP_COUNT'])
     
     def feature_engineering(self)->None:
         """
@@ -71,13 +65,6 @@ class Cooler(Source):
         # --- Create features ---
         self.coolerDf = self.coolerDf.groupBy('CUSTOMER').agg(f.sum('ACTUAL_DOORS').alias('COOLER_DOORS_SUM'), f.countDistinct('EQUIPMENT').alias('COOLER_EQUIP_COUNT'))
         
-    def assemble(self)->DataFrame:
-        self.load_data()
-        self.filter_data()
-        self.feature_engineering()
-        self.impute_nans()
-
-        return self.coolerDf
 
 class Demographics(Source):
     """
@@ -131,65 +118,7 @@ class Demographics(Source):
 
         # Add density features
         self.demographicsDf = self.demographicsDf.withColumn('population_density', f.expr(self.this_config['population_density']))
-        self.demographicsDf = self.demographicsDf.withColumn('competitor_count_density', f.expr(self.this_config['competitor_count_density']) )
-        
-    def impute_nans(self)->DataFrame:
-        """
-        Impute Nans on derived features using k-nn imputation strategy
-
-        """
-        customerDf = customerDf.fillna("UNKNOWN", subset = [x for x in customerDf.columns if "CUST_" in x])
-
-        to_numeric = [col for col in  demographicsDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
-
-        demographicsExcNanDf = demographicsDf.dropna(how='any')
-        demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c + "_full") for c in demographicsExcNanDf.columns])
-
-        allNanPdf = demographicsDf.join(demographicsExcNanDf, demographicsDf["CUSTOMER"]==demographicsExcNanDf["CUSTOMER_full"], 'left_anti').toPandas()
-        demographicsExcNanPDf= demographicsExcNanDf.toPandas()
-
-        kd = KDTree(demographicsExcNanPDf[["LATITUDE_full", "LONGITUDE_full"]].values, metric='euclidean')
-
-        allNanPdf['distances_euc'], allNanPdf['indices'] = kd.query(allNanPdf[["LATITUDE", "LONGITUDE"]], k = 1)
-        allNanPdf['distances_km'] = allNanPdf['distances_euc'] * 104.867407
-
-        demographicsExcNanPDf = demographicsExcNanPDf.reset_index().rename(columns = {"index": "indices"})
-        allNanPdf = allNanPdf.merge(demographicsExcNanPDf, on ='indices', how = 'left')
-
-        # Impute only if distance is less than 5km
-        notImputePdf = allNanPdf[allNanPdf['distances_km']>=5]
-        imputePdf = allNanPdf[allNanPdf['distances_km']<5]
-
-        notImputePdf[to_numeric] = notImputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
-        imputePdf[to_numeric] = imputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
-        # Transform pandas DF to pyspark DF
-        notImputeDf = spark.createDataFrame(notImputePdf).drop("distances_euc", "distances_km", "indices")
-        imputeDf = spark.createDataFrame(imputePdf.replace(float('nan'), None)).drop("distances_euc", "distances_km", "indices")    
-
-        # Impute columns
-        wArea = Window().partitionBy("_BIC_CDMD_AREA")
-        cols_to_impute = [x for x in imputeDf.columns if "full" not in x]
-        for col in cols_to_impute:
-            imputeDf = imputeDf.withColumn(col, f.coalesce(f.col(col), f.col(col + "_full"),f.avg(f.col(col)).over(wArea))
-            )
-
-        # Drop/rename helper columns
-        imputeDf = imputeDf.drop(*[x for x in imputeDf.columns if "full" in x])
-
-        notImputeDf = notImputeDf.drop(*[x for x in notImputeDf.columns if "full" in x])
-        demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c.replace('_full', '')) for c in demographicsExcNanDf.columns])
-
-        # Join Imputed and Full data
-        demographicsImputedDf = imputeDf.unionByName(demographicsExcNanDf).unionByName(notImputeDf)
-        demographicsImputedDf = demographicsImputedDf.drop("LATITUDE", "LONGITUDE")
-
-    def assemble(self):
-        self.load_data()
-        self.filter_data()
-        self.feature_engineering()
-        # TODO Remove impute_nans
-        self.impute_nans()
-        return self.demographicsDf 
+        self.demographicsDf = self.demographicsDf.withColumn('competitor_count_density', f.expr(self.this_config['competitor_count_density']) ) 
 
 class Customer(Source):
 
@@ -238,14 +167,6 @@ class Customer(Source):
         #Keel only informative columns
         self.customerDf = self.customerDf.select(*self.this_config['customer_selected_columns'])
 
-    def impute_nans(self)->None:pass 
-
-    def assemble(self)->DataFrame:
-        self.load_data()
-        self.filter_data()
-        self.feature_engineering()
-        self.impute_nans()
-        return self.customerDf
 
 class Sales(Source):
     """
@@ -350,23 +271,73 @@ class Sales(Source):
 
         self.salesDf = self.salesDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
 
-    def impute_nans(self)->None:pass 
-
-    def assemble(self)->DataFrame:
-        self.load_data()
-        self.filter_data()
-        self.feature_engineering()
-        self.impute_nans()
-        return self.salesDf
 
 def make_analytical_base_table(customerDF:DataFrame, 
                             coolersDf: DataFrame, salesDf:DataFrame,
-                            demographicsImputedDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
+                            demographicsDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
     
     # TODO Swap to inner to left 
-    abtDf = customerDF.join(demographicsImputedDf, on='CUSTOMER', how='left')\
+    abtDf = customerDF.join(demographicsDf, on='CUSTOMER', how='left')\
                     .join(coolersDf,  on='CUSTOMER', how='left')\
                     .join(salesDf, on='CUSTOMER', how='left')
+
+    customerDf = customerDf.fillna("UNKNOWN", subset = [x for x in customerDf.columns if "CUST_" in x])
+
+    to_numeric = [col for col in  demographicsDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
+    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in demographicsDf.columns ])
+
+
+    demographicsExcNanDf = demographicsOfAllCustDf.dropna(how='any')
+    demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c + "_full") for c in demographicsExcNanDf.columns])
+
+    allNanPdf = demographicsOfAllCustDf.join(demographicsExcNanDf, demographicsOfAllCustDf["CUSTOMER"]==demographicsExcNanDf["CUSTOMER_full"], 'left_anti').toPandas()
+    demographicsExcNanPDf= demographicsExcNanDf.toPandas()
+
+    kd = KDTree(demographicsExcNanPDf[["LATITUDE_full", "LONGITUDE_full"]].values, metric='euclidean')
+
+    allNanPdf['distances_euc'], allNanPdf['indices'] = kd.query(allNanPdf[["LATITUDE", "LONGITUDE"]], k = 1)
+    allNanPdf['distances_km'] = allNanPdf['distances_euc'] * 104.867407
+
+    demographicsExcNanPDf = demographicsExcNanPDf.reset_index().rename(columns = {"index": "indices"})
+    allNanPdf = allNanPdf.merge(demographicsExcNanPDf, on ='indices', how = 'left')
+
+    # Impute only if distance is less than 5km
+    notImputePdf = allNanPdf[allNanPdf['distances_km']>=5]
+    imputePdf = allNanPdf[allNanPdf['distances_km']<5]
+
+    notImputePdf[to_numeric] = notImputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
+    imputePdf[to_numeric] = imputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
+    # Transform pandas DF to pyspark DF
+    notImputeDf = spark.createDataFrame(notImputePdf).drop("distances_euc", "distances_km", "indices")
+    imputeDf = spark.createDataFrame(imputePdf.replace(float('nan'), None)).drop("distances_euc", "distances_km", "indices")    
+
+    # Impute columns
+    wArea = Window().partitionBy("_BIC_CDMD_AREA")
+    cols_to_impute = [x for x in imputeDf.columns if "full" not in x]
+    for col in cols_to_impute:
+        imputeDf = imputeDf.withColumn(col, f.coalesce(f.col(col), f.col(col + "_full"),f.avg(f.col(col)).over(wArea)))
+
+    # Drop/rename helper columns
+    imputeDf = imputeDf.drop(*[x for x in imputeDf.columns if "full" in x])
+
+    notImputeDf = notImputeDf.drop(*[x for x in notImputeDf.columns if "full" in x])
+    demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c.replace('_full', '')) for c in demographicsExcNanDf.columns])
+
+    # Join Imputed and Full data
+    demographicsImputedDf = imputeDf.unionByName(demographicsExcNanDf).unionByName(notImputeDf)
+    demographicsImputedDf = demographicsImputedDf.drop("LATITUDE", "LONGITUDE")
+
+    #Rename columns(Adding prefix imputed)
+    demographicsImputedDf = demographicsImputedDf.select(*[f.col(colName).alias("imputed_" + colName)  if colName != 'CUSTOMER' else f.col(colName) for colName in demographicsImputedDf.columns ])
+
+    #Keep only imputed columns from demographics dataset
+    leaveColLst = ['CUSTOMER', 'TAA_TC', 'urbanicity', 'CUSTOMER_DESC', 'LONGITUDE', 'LATITUDE', '_BIC_CTRADE_CH', '_BIC_CDMD_AREA', 'ta_size','geometry']
+
+    abtDf = abtDf.join(demographicsImputedDf, on='CUSTOMER', how='inner')
+    abtDf = abtDf.drop(*[colName for colName in demographicsDf.columns if colName not in leaveColLst])
+
+    # Remove prefix `imputed`
+    abtDf = abtDf.select(*[colName if 'imputed' in colName else colName for colName in abtDf.columns])
 
     abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",f.lit(None))
     abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",
@@ -390,10 +361,24 @@ def make_analytical_base_table(customerDF:DataFrame,
                         ))
     abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed']) 
 
-    abtDf = abtDf.select(INCLUDE_COLS_LIST)
+    abtDf = abtDf.select(INCLUDE_COLS_LIST) 
+
+    #Get BU latest processed file 
+    latestFileName = get_latest_modified_file_from_directory(COUNTRY_INPUT_DATA_DIRECTORY).rsplit("_",1).pop(0)
+    print(f"This is the filepath:{latestFileName}")
+    # Load BU data to a pyspark.DataFrame
+    previousAbtDf =  spark.read.option("header", "true").option("sep", ",").csv(latestFileName)
+
+    previousAbtDf = previousAbtDf.withColumn('pardt', f.lit('20220512'))
+    newAbtDf = abtDf.join(previousAbtDf, on='CUSTOMER', how = 'left_anti')
+
+
+    pardt=datetime.now().strftime("%Y%m%d")
+    newAbtDf = newAbtDf.withColumn('pardt', f.lit(pardt))
+    allAbtDf = previousAbtDf.union(newAbtDf)
 
     partition_date=datetime.now().strftime("%Y%m%d_%H%M%S")
     #TODO Fix output save file path
-    abtDf.write.csv(f"/mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv", header=True)
+    allAbtDf.write.csv(f"/mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv", header=True)
 
 
