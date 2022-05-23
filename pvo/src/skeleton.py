@@ -48,15 +48,12 @@ class Source(ABC):
         """
         pass 
 
-    @abstractmethod 
-    def impute_nans(self)->None:
-        """
-        Impute Nans using using a specific strategy defined in concrete implementations
-        """
-        pass 
-
-    @abstractmethod 
-    def assemble(self)->DataFrame:pass 
+    def assemble(self)->DataFrame:
+        self.load_data()
+        self.filter_data()
+        self.feature_engineering()
+        
+        return self
 
 
 class PvoModelling(ABC):
