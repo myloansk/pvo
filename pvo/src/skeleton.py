@@ -9,7 +9,7 @@ from pyspark.sql.window import Window
 from functools import reduce
 from pyspark.sql import DataFrame
 from sklearn.neighbors import BallTree, KDTree
-
+from typing import Dict 
 from utils import get_latest_modified_file_from_directory
 
 spark.sql("set spark.sql.execution.arrow.pyspark.fallback.enabled=false")
@@ -27,6 +27,10 @@ class Source(ABC):
     but leave the template method itself intact.
 
     """
+    def __init__(self)->None:
+        self._sparkDf:DataFrame = None
+        self._this_config:Dict = None
+    
     @abstractmethod 
     def load_data(self)->None:
         """
@@ -47,6 +51,8 @@ class Source(ABC):
         Creating additional features for input columns loaded to pyspark.DataFrame
         """
         pass 
+
+    
 
     def assemble(self)->DataFrame:
         self.load_data()
