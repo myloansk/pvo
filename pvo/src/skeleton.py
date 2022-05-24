@@ -30,6 +30,19 @@ class Source(ABC):
     def __init__(self)->None:
         self._sparkDf:DataFrame = None
         self._this_config:Dict = None
+
+    def set_params(self, paparsedConfigDict:Dict): 
+        self._this_config = paparsedConfigDict 
+
+        return self 
+
+    @property 
+    def get_params(self)->Dict:
+        return self._this_config 
+
+    @property 
+    def get_data(self)->DataFrame:
+        return self._sparkDf
     
     @abstractmethod 
     def load_data(self)->None:
