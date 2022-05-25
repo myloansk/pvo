@@ -75,9 +75,8 @@ class Demographics(Source):
                     composed of calls, usually to abstract primitive operations. 
     :type Source: class
     """
-    def __init__(self,configParsed)->None:
-        self.demographicsDf = None 
-        self.this_config = configParsed 
+    def __init__(self) -> None:
+        super().__init__()
 
     def load_data(self) -> DataFrame:
         """
@@ -130,8 +129,8 @@ class Customer(Source):
                         composed of calls, usually to abstract primitive operations. 
         :type Source: class
         """
-        self.customerDf:DataFrame = None
-        self.this_config = config
+        def __init__(self) -> None:
+            super().__init__()
     
     def load_data(self)->None:
         """
