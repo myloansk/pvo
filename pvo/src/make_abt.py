@@ -41,18 +41,18 @@ class Cooler(Source):
         Loads cooler data using config Dict for getting the filepath
         """
         dfs = []
-        for companyCode in self.this_config['company_code']:
-            dfs.append(spark.read.option("header", "true").parquet(self.this_config['cooler_file_path'].format(CAPS_CC = self.this_config['country_code'].upper(), companyCode = companyCode )))
-        self.coolerDf = reduce(DataFrame.unionAll, dfs)
+        for companyCode in self._this_config['company_code']:
+            dfs.append(spark.read.option("header", "true").parquet(self._this_config['cooler_file_path'].format(CAPS_CC = self._this_config['country_code'].upper(), companyCode = companyCode )))
+        self._sparkDf = reduce(DataFrame.unionAll, dfs)
 
     def filter_data(self)->None:
-        periodLatest = self.coolerDf.agg({"FISCPER": "max"}).collect()[0][0]
+        periodLatest = self._sparkDf.agg({"FISCPER": "max"}).collect()[0][0]
         print(periodLatest)
 
-        self.coolerDf = self.coolerDf.selectExpr([colExpr for colExpr in self.this_config['selected_coolers_column_list']])\
-                                    .filter(self.this_config['filtering_cooler_conditions'].format( periodLatest = periodLatest))
+        self._sparkDf = self._sparkDf.selectExpr([colExpr for colExpr in self._this_config['selected_coolers_column_list']])\
+                                    .filter(self._this_config['filtering_cooler_conditions'].format( periodLatest = periodLatest))
         # --- Remove duplicates (if exist) ---
-        self.coolerDf = self.coolerDf.select(*self.this_config['output_selected_column_list']).distinct()
+        self._sparkDf = self._sparkDf.select(*self._this_config['output_selected_column_list']).distinct()
         
     
     def feature_engineering(self)->None:
@@ -61,7 +61,7 @@ class Cooler(Source):
         that will take part in estimating potential of each outlet 
         """
         # --- Create features ---
-        self.coolerDf = self.coolerDf.groupBy('CUSTOMER').agg(f.sum('ACTUAL_DOORS').alias('COOLER_DOORS_SUM'), f.countDistinct('EQUIPMENT').alias('COOLER_EQUIP_COUNT'))
+        self._sparkDf = self._sparkDf.groupBy('CUSTOMER').agg(f.sum('ACTUAL_DOORS').alias('COOLER_DOORS_SUM'), f.countDistinct('EQUIPMENT').alias('COOLER_EQUIP_COUNT'))
         
 
 class Demographics(Source):
@@ -82,7 +82,7 @@ class Demographics(Source):
         """
         Loads cooler data using config Dict for getting the filepath
         """
-        self.demographicsDf =  spark.read.option("header", "true").option("sep", ",").csv(self.this_config['demographics_file_path'].format(cc = self.this_config['country_code']))
+        self._sparkDf =  spark.read.option("header", "true").option("sep", ",").csv(self._this_config['demographics_file_path'].format(cc = self._this_config['country_code']))
         
     def filter_data(self) -> DataFrame:
         pass
@@ -94,28 +94,28 @@ class Demographics(Source):
         """
         # Convert age groups to percentages
 
-        for Col in  self.this_config['age_group_column_list']: self.demographicsDf = self.demographicsDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('pop_sum')), 2), f.lit(0)))  
+        for Col in  self._this_config['age_group_column_list']: self._sparkDf = self._sparkDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('pop_sum')), 2), f.lit(0)))  
 
         # Add per capita in spending
-        self.demographicsDf = self.demographicsDf.withColumn('wvce_01_pc',f.expr(self.this_config['wvce_01_pc']))
-        self.demographicsDf = self.demographicsDf.withColumn('wvce_02_pc',f.expr(self.this_config['wvce_02_pc']))
+        self._sparkDf = self._sparkDf.withColumn('wvce_01_pc',f.expr(self._this_config['wvce_01_pc']))
+        self._sparkDf = self._sparkDf.withColumn('wvce_02_pc',f.expr(self._this_config['wvce_02_pc']))
         
 
         # Add seasonal traffic diff
-        self.demographicsDf = self.demographicsDf.withColumn('TF_WINTER', f.expr(self.this_config['TF_WINTER']))
-        self.demographicsDf = self.demographicsDf.withColumn('TF_SUMMER', f.expr(self.this_config['TF_SUMMER']))
+        self._sparkDf = self._sparkDf.withColumn('TF_WINTER', f.expr(self._this_config['TF_WINTER']))
+        self._sparkDf = self._sparkDf.withColumn('TF_SUMMER', f.expr(self._this_config['TF_SUMMER']))
         
-        self.demographicsDf = self.demographicsDf.withColumn('Season_traffic_perc_diff', f.expr(self.this_config['Season_traffic_perc_diff']))
+        self._sparkDf = self._sparkDf.withColumn('Season_traffic_perc_diff', f.expr(self._this_config['Season_traffic_perc_diff']))
 
         # Add weekend traffic diff
-        self.demographicsDf = self.demographicsDf.withColumn('Weekend_traffic_perc_diff',f.expr(self.this_config['Weekend_traffic_perc_diff']))
+        self._sparkDf = self._sparkDf.withColumn('Weekend_traffic_perc_diff',f.expr(self._this_config['Weekend_traffic_perc_diff']))
         
         # Convert to time of day traffic to percentages
-        for Col in  self.this_config['traffic_hours']: self.demographicsDf = demographicsDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('monthly_traffic_avg_mean')), 2), f.lit(0)))
+        for Col in  self._this_config['traffic_hours']: self._sparkDf = _sparkDf.withColumn('Percentage_'+Col, f.coalesce(f.round(f.col(Col)/(f.col('monthly_traffic_avg_mean')), 2), f.lit(0)))
 
         # Add density features
-        self.demographicsDf = self.demographicsDf.withColumn('population_density', f.expr(self.this_config['population_density']))
-        self.demographicsDf = self.demographicsDf.withColumn('competitor_count_density', f.expr(self.this_config['competitor_count_density']) ) 
+        self._sparkDf = self._sparkDf.withColumn('population_density', f.expr(self._this_config['population_density']))
+        self._sparkDf = self._sparkDf.withColumn('competitor_count_density', f.expr(self._this_config['competitor_count_density']) ) 
 
 class Customer(Source):
 
@@ -136,33 +136,33 @@ class Customer(Source):
         """
         Load data to pyspark.DataFrame from datalake
         """
-        self.customerDf = spark.read.option("header", "true").option("sep", "|").csv(self.this_config['customer_md_file_path'])
+        self._sparkDf = spark.read.option("header", "true").option("sep", "|").csv(self._this_config['customer_md_file_path'])
 
     def filter_data(self)->None:
         """
         Apply standard filters as it deemed appropriate by business stakeholders
         """
-        self.customerDf = self.customerDf.filter(self.this_config['filtering_conditions'])
+        self._sparkDf = self._sparkDf.filter(self._this_config['filtering_conditions'])
 
     def feature_engineering(self)->None:
         """
         Create features associated with customer data including labelcol 
         """
         # Rename columns
-        self.customerDf = self.customerDf.select( *[ f.col(colName) for colName in self.customerDf.columns if colName not in self.this_config['rename_columns_dict']] + [f.col(key).alias(value) for key, value in self.this_config['rename_columns_dict'].items() ])
+        self._sparkDf = self._sparkDf.select( *[ f.col(colName) for colName in self._sparkDf.columns if colName not in self._this_config['rename_columns_dict']] + [f.col(key).alias(value) for key, value in self._this_config['rename_columns_dict'].items() ])
     
     
         # Create additional columns
-        self.customerDf = (self.customerDf.withColumn("CUST_ROUTED", f.expr(self.this_config['CUST_ROUTED']))
-                                        .withColumn('second_digit_ccaf', f.expr(self.this_config['second_digit_ccaf']))
-                                        .withColumn('CUST_CCAF_GROUP', f.expr(self.this_config['CUST_CCAF_GROUP']))
+        self._sparkDf = (self._sparkDf.withColumn("CUST_ROUTED", f.expr(self._this_config['CUST_ROUTED']))
+                                        .withColumn('second_digit_ccaf', f.expr(self._this_config['second_digit_ccaf']))
+                                        .withColumn('CUST_CCAF_GROUP', f.expr(self._this_config['CUST_CCAF_GROUP']))
                     )
     
         # Convert long/lat to double
-        self.customerDf = self.customerDf.withColumn('LONGITUDE', f.expr(self.this_config['LONGITUDE'])).withColumn('LATITUDE', f.expr(self.this_config['LATITUDE'] ))
+        self._sparkDf = self._sparkDf.withColumn('LONGITUDE', f.expr(self._this_config['LONGITUDE'])).withColumn('LATITUDE', f.expr(self._this_config['LATITUDE'] ))
     
         #Keel only informative columns
-        self.customerDf = self.customerDf.select(*self.this_config['customer_selected_columns'])
+        self._sparkDf = self._sparkDf.select(*self._this_config['customer_selected_columns'])
 
 
 class Sales(Source):
@@ -188,34 +188,34 @@ class Sales(Source):
         In the end list is reduced to a single pyspark.DataFrame
         """
         dfs = []
-        for salesOrg in self.this_config['sales_org']:
-            dfs.append(spark.read.parquet(self.this_config['sales_file_path'].format(CAPS_CC = self.this_config['country_code'].upper(), salesOrg = salesOrg) ,header='true'))
+        for salesOrg in self._this_config['sales_org']:
+            dfs.append(spark.read.parquet(self._this_config['sales_file_path'].format(CAPS_CC = self._this_config['country_code'].upper(), salesOrg = salesOrg) ,header='true'))
 
-        self.salesDf = reduce(DataFrame.unionAll, dfs)
+        self._sparkDf = reduce(DataFrame.unionAll, dfs)
     
     def filter_data(self)->None:
         """
         Applying standard filters and minor trannsformation including column renaming and enrichment
         """
         
-        self.salesDf = self.salesDf.filter(''.join(self.this_config['filter_data_filtering_criteria_1']))
+        self._sparkDf = self._sparkDf.filter(''.join(self._this_config['filter_data_filtering_criteria_1']))
 
         # Correct data types & rename
-        self.salesDf = (self.salesDf.withColumn('MATERIAL', f.expr(self.this_config['filter_data_MATERIAL_create']))
-                                    .withColumn('Direct_Sales_Volume_in_UC', f.expr(self.this_config['filter_data_Direct_Sales_Volume_in_UC_create']))
-                                    .withColumn('Indirect_Sales_NSR', f.expr(self.this_config['filter_data_Indirect_Sales_NSR_create']))
-                                    .withColumn('Indirect_Sales_Volume_in_UC',  f.expr(self.this_config['filter_data_Indirect_Sales_Volume_in_UC_create']))
-                                    .withColumn('Direct_Sales_NSR', f.expr(self.this_config['filter_data_Direct_Sales_NSR_create']))
+        self._sparkDf = (self._sparkDf.withColumn('MATERIAL', f.expr(self._this_config['filter_data_MATERIAL_create']))
+                                    .withColumn('Direct_Sales_Volume_in_UC', f.expr(self._this_config['filter_data_Direct_Sales_Volume_in_UC_create']))
+                                    .withColumn('Indirect_Sales_NSR', f.expr(self._this_config['filter_data_Indirect_Sales_NSR_create']))
+                                    .withColumn('Indirect_Sales_Volume_in_UC',  f.expr(self._this_config['filter_data_Indirect_Sales_Volume_in_UC_create']))
+                                    .withColumn('Direct_Sales_NSR', f.expr(self._this_config['filter_data_Direct_Sales_NSR_create']))
                                     .withColumnRenamed('FIELDNM005', 'CURRENCY')
                                     .drop("FISCPER")
             )
     
         # Calendar
-        calendarDf = spark.read.option("header", "true").csv(self.this_config['calendar_file_path'])
+        calendarDf = spark.read.option("header", "true").csv(self._this_config['calendar_file_path'])
         # Add calendar
-        self.salesDf = self.salesDf.join(calendarDf.select(*self.this_config['filter_data_calendar_selected_columns']).distinct(), on='CALDAY', how='left') 
+        self._sparkDf = self._sparkDf.join(calendarDf.select(*self._this_config['filter_data_calendar_selected_columns']).distinct(), on='CALDAY', how='left') 
 
-        periodLatest, numOfDays = self.salesDf.select(f.col("FISCPER"),
+        periodLatest, numOfDays = self._sparkDf.select(f.col("FISCPER"),
                                                 f.datediff(
                                                     f.to_date(f.max(f.col("CALDAY")).over(Window().partitionBy(f.col("FISCPER"))), 'yyyyMMdd'),
                                                     f.trunc( f.to_date(f.max(f.col("CALDAY")).over(Window().partitionBy(f.col("FISCPER"))), 'yyyyMMdd'), "month")).alias('num_of_days_passed_from_start_of_month'))\
@@ -226,7 +226,7 @@ class Sales(Source):
 
         periodStart = (datetime.strptime(periodLatest[0:4] + '-' + periodLatest[6:7] + '-01', '%Y-%m-%d').date() - relativedelta(months=12)).strftime("%Y0%m")
         # Filter for relevant periods
-        self.salesDf = self.salesDf.filter(self.this_config['filter_data_filtering_criteria_2'].format( periodStart = periodStart, periodLatest = periodLatest ))
+        self._sparkDf = self._sparkDf.filter(self._this_config['filter_data_filtering_criteria_2'].format( periodStart = periodStart, periodLatest = periodLatest ))
 
 
     def feature_engineering(self)->None:
@@ -238,51 +238,51 @@ class Sales(Source):
         #     error is Can't extract value from CheckOverflow((promote_precision(cast(coalesce(Direct_Sales_Volume_in_UC#4342, cast(0 as decimal(38,3))) as decimal(38,3))) 
         #              + promote_precision(cast(coalesce(Indirect_Sales_Volume_in_UC#4383, cast(0 as decimal(38,3))) as decimal(38,3)))), DecimalType(38,3), true): 
         #               need struct type but got decimal(38,3)
-        #self.salesDf = self.salesDf.withColumn('Sales_Volume_in_UC',f.expr(self.this_config['feature_engineering_Sales_Volume_in_UC_create']))\
-        #                        .withColumn('Sales_NSR',f.expr(self.this_config['feature_engineering_Sales_NSR_create']))\
-        #                        .select(self.this_config['feature_engineering_selected_columns'], ['Sales_Volume_in_UC','Sales_NSR'])
-        self.salesDf = (self.salesDf.select('CUSTOMER', 'CALDAY', 'FISCPER', 'MATERIAL',
+        #self._sparkDf = self._sparkDf.withColumn('Sales_Volume_in_UC',f.expr(self._this_config['feature_engineering_Sales_Volume_in_UC_create']))\
+        #                        .withColumn('Sales_NSR',f.expr(self._this_config['feature_engineering_Sales_NSR_create']))\
+        #                        .select(self._this_config['feature_engineering_selected_columns'], ['Sales_Volume_in_UC','Sales_NSR'])
+        self._sparkDf = (self._sparkDf.select('CUSTOMER', 'CALDAY', 'FISCPER', 'MATERIAL',
                                         f.coalesce(f.col('Direct_Sales_Volume_in_UC'), f.lit(0)) + f.coalesce(f.col('Indirect_Sales_Volume_in_UC'), f.lit(0))).alias('Sales_Volume_in_UC'),
                                         (f.coalesce(f.col('Direct_Sales_NSR'), f.lit(0)) + f.coalesce(f.col('Indirect_Sales_NSR'), f.lit(0))).alias('Sales_NSR'),
                                         'CURRENCY'
                                         )
 
         # Impute currency
-        unique_currency_df = (self.salesDf.filter(self.this_config['impute_nans_filter_1'])
+        unique_currency_df = (self._sparkDf.filter(self._this_config['impute_nans_filter_1'])
                                         .groupBy('CUSTOMER').agg(f.countDistinct('CURRENCY').alias('currency_options'), f.first('CURRENCY').alias('UNIQUE_CURRENCY'))
-                                        .filter(self.this_config['impute_nans_filter_2'])
-                                        .drop(self.this_config['impute_nans_drop_columns_list'])
+                                        .filter(self._this_config['impute_nans_filter_2'])
+                                        .drop(self._this_config['impute_nans_drop_columns_list'])
                             )
 
-        self.salesDf = (self.salesDf.join(unique_currency_df, on=self.this_config['impute_nans_join_operation']['join_on'], how=self.this_config['impute_nans_join_operation']['how'])
-                                    .withColumn('CURRENCY',f.expr(self.this_config['impute_nans_CURRENCY_create']))
+        self._sparkDf = (self._sparkDf.join(unique_currency_df, on=self._this_config['impute_nans_join_operation']['join_on'], how=self._this_config['impute_nans_join_operation']['how'])
+                                    .withColumn('CURRENCY',f.expr(self._this_config['impute_nans_CURRENCY_create']))
                                     .fillna('NA', subset=['CURRENCY'])
-                                    .drop(self.this_config['impute_nans_drop_column_list_v2'])
+                                    .drop(self._this_config['impute_nans_drop_column_list_v2'])
                     )
 
-        self.salesDf = self.salesDf.withColumn("Sales_Volume_in_UC_monthly_sum", f.sum(f.col("Sales_Volume_in_UC")).over(Window().partitionBy("CUSTOMER","FISCPER")))\
+        self._sparkDf = self._sparkDf.withColumn("Sales_Volume_in_UC_monthly_sum", f.sum(f.col("Sales_Volume_in_UC")).over(Window().partitionBy("CUSTOMER","FISCPER")))\
                                 .withColumn("Sales_NSR_monthly_sum",f.sum(f.col("Sales_NSR")).over(Window().partitionBy("CUSTOMER","FISCPER")))
 
-        self.salesDf = self.salesDf.withColumn("Sales_Volume_in_UC_rolling_xmonths_back_avg", f.avg(f.col("Sales_Volume_in_UC_monthly_sum")).over(Window().partitionBy("CUSTOMER")))\
+        self._sparkDf = self._sparkDf.withColumn("Sales_Volume_in_UC_rolling_xmonths_back_avg", f.avg(f.col("Sales_Volume_in_UC_monthly_sum")).over(Window().partitionBy("CUSTOMER")))\
                                 .withColumn("Sales_NSR_rolling_xmonths_back_avg", f.avg(f.col("Sales_NSR_monthly_sum")).over(Window().partitionBy("CUSTOMER")))
 
 
-        self.salesDf = self.salesDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
+        self._sparkDf = self._sparkDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
 
 
-def make_analytical_base_table(customerDF:DataFrame, 
-                            coolersDf: DataFrame, salesDf:DataFrame,
-                            demographicsDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
+def make_analytical_base_table(_sparkDf:DataFrame, 
+                            coolersDf: DataFrame, _sparkDf:DataFrame,
+                            _sparkDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
     
     # TODO Swap to inner to left 
-    abtDf = customerDF.join(demographicsDf, on='CUSTOMER', how='left')\
+    abtDf = _sparkDf.join(_sparkDf, on='CUSTOMER', how='left')\
                     .join(coolersDf,  on='CUSTOMER', how='left')\
-                    .join(salesDf, on='CUSTOMER', how='left')
+                    .join(_sparkDf, on='CUSTOMER', how='left')
 
-    customerDf = customerDf.fillna("UNKNOWN", subset = [x for x in customerDf.columns if "CUST_" in x])
+    _sparkDf = _sparkDf.fillna("UNKNOWN", subset = [x for x in _sparkDf.columns if "CUST_" in x])
 
-    to_numeric = [col for col in  demographicsDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
-    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in demographicsDf.columns ])
+    to_numeric = [col for col in  _sparkDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
+    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in _sparkDf.columns ])
 
 
     demographicsExcNanDf = demographicsOfAllCustDf.dropna(how='any')
@@ -332,7 +332,7 @@ def make_analytical_base_table(customerDF:DataFrame,
     leaveColLst = ['CUSTOMER', 'TAA_TC', 'urbanicity', 'CUSTOMER_DESC', 'LONGITUDE', 'LATITUDE', '_BIC_CTRADE_CH', '_BIC_CDMD_AREA', 'ta_size','geometry']
 
     abtDf = abtDf.join(demographicsImputedDf, on='CUSTOMER', how='inner')
-    abtDf = abtDf.drop(*[colName for colName in demographicsDf.columns if colName not in leaveColLst])
+    abtDf = abtDf.drop(*[colName for colName in _sparkDf.columns if colName not in leaveColLst])
 
     # Remove prefix `imputed`
     abtDf = abtDf.select(*[colName if 'imputed' in colName else colName for colName in abtDf.columns])
