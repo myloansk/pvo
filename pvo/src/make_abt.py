@@ -33,9 +33,8 @@ class Cooler(Source):
                     composed of calls, usually to abstract primitive operations. 
     :type Source: class
     """
-    def __init__(self, config):
-        self.cooleDf:DataFrame = None
-        self.this_config = config 
+    def __init__(self) -> None:
+        super().__init__()
 
     def load_data(self)->None:
         """
@@ -178,9 +177,10 @@ class Sales(Source):
     :type Source: class
     """
 
-    def __init__(self, parsedConfig) -> None:
-        self.salesDf:DataFrame = None 
-        self.this_config = parsedConfig 
+    def __init__(self) -> None:
+        super().__init__()
+        
+    
 
     def load_data(self)->None:
         """
