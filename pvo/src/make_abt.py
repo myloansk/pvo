@@ -179,8 +179,6 @@ class Sales(Source):
     def __init__(self) -> None:
         super().__init__()
         
-    
-
     def load_data(self)->None:
         """
         Load data to pyspark.DataFrame by iteratively adding a pyspark.DataFrame with
@@ -270,3 +268,110 @@ class Sales(Source):
         self._sparkDf = self._sparkDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
 
 
+def make_analytical_base_table(customerDF:DataFrame, 
+                            coolersDf: DataFrame, salesDf:DataFrame,
+                            demographicsDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
+    
+    abtDf = customerDF.join(demographicsDf, on='CUSTOMER', how='left')\
+                    .join(coolersDf,  on='CUSTOMER', how='left')\
+                    .join(salesDf, on='CUSTOMER', how='left')
+
+    customerDf = customerDf.fillna("UNKNOWN", subset = [x for x in customerDf.columns if "CUST_" in x])
+
+    to_numeric = [col for col in  demographicsDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
+    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in demographicsDf.columns ])
+
+
+    demographicsExcNanDf = demographicsOfAllCustDf.dropna(how='any')
+    demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c + "_full") for c in demographicsExcNanDf.columns])
+
+    allNanPdf = demographicsOfAllCustDf.join(demographicsExcNanDf, demographicsOfAllCustDf["CUSTOMER"]==demographicsExcNanDf["CUSTOMER_full"], 'left_anti').toPandas()
+    demographicsExcNanPDf= demographicsExcNanDf.toPandas()
+
+    kd = KDTree(demographicsExcNanPDf[["LATITUDE_full", "LONGITUDE_full"]].values, metric='euclidean')
+
+    allNanPdf['distances_euc'], allNanPdf['indices'] = kd.query(allNanPdf[["LATITUDE", "LONGITUDE"]], k = 1)
+    allNanPdf['distances_km'] = allNanPdf['distances_euc'] * 104.867407
+
+    demographicsExcNanPDf = demographicsExcNanPDf.reset_index().rename(columns = {"index": "indices"})
+    allNanPdf = allNanPdf.merge(demographicsExcNanPDf, on ='indices', how = 'left')
+
+    # Impute only if distance is less than 5km
+    notImputePdf = allNanPdf[allNanPdf['distances_km']>=5]
+    imputePdf = allNanPdf[allNanPdf['distances_km']<5]
+
+    notImputePdf[to_numeric] = notImputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
+    imputePdf[to_numeric] = imputePdf[to_numeric].apply(pd.to_numeric, errors='coerce')
+    # Transform pandas DF to pyspark DF
+    notImputeDf = spark.createDataFrame(notImputePdf).drop("distances_euc", "distances_km", "indices")
+    imputeDf = spark.createDataFrame(imputePdf.replace(float('nan'), None)).drop("distances_euc", "distances_km", "indices")    
+
+    # Impute columns
+    wArea = Window().partitionBy("_BIC_CDMD_AREA")
+    cols_to_impute = [x for x in imputeDf.columns if "full" not in x]
+    for col in cols_to_impute:
+        imputeDf = imputeDf.withColumn(col, f.coalesce(f.col(col), f.col(col + "_full"),f.avg(f.col(col)).over(wArea)))
+
+    # Drop/rename helper columns
+    imputeDf = imputeDf.drop(*[x for x in imputeDf.columns if "full" in x])
+
+    notImputeDf = notImputeDf.drop(*[x for x in notImputeDf.columns if "full" in x])
+    demographicsExcNanDf = demographicsExcNanDf.select([f.col(c).alias(c.replace('_full', '')) for c in demographicsExcNanDf.columns])
+
+    # Join Imputed and Full data
+    demographicsImputedDf = imputeDf.unionByName(demographicsExcNanDf).unionByName(notImputeDf)
+    demographicsImputedDf = demographicsImputedDf.drop("LATITUDE", "LONGITUDE")
+
+    #Rename columns(Adding prefix imputed)
+    demographicsImputedDf = demographicsImputedDf.select(*[f.col(colName).alias("imputed_" + colName)  if colName != 'CUSTOMER' else f.col(colName) for colName in demographicsImputedDf.columns ])
+
+    #Keep only imputed columns from demographics dataset
+    leaveColLst = ['CUSTOMER', 'TAA_TC', 'urbanicity', 'CUSTOMER_DESC', 'LONGITUDE', 'LATITUDE', '_BIC_CTRADE_CH', '_BIC_CDMD_AREA', 'ta_size','geometry']
+
+    abtDf = abtDf.join(demographicsImputedDf, on='CUSTOMER', how='inner')
+    abtDf = abtDf.drop(*[colName for colName in demographicsDf.columns if colName not in leaveColLst])
+
+    # Remove prefix `imputed`
+    abtDf = abtDf.select(*[colName if 'imputed' in colName else colName for colName in abtDf.columns])
+
+    abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",f.lit(None))
+    abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",
+                        f.coalesce(
+                                    f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double"),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy("CUST_CTRADE_CH_DESC","CUST_CDMD_AREA")),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
+                                    f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
+                        ))
+
+    abtDf.write.mode("overwrite").saveAsTable("harry.temp_abt")
+    abtDf = spark.sql("select * from harry.temp_abt")
+
+    abtDf = abtDf.withColumn("Sales_NSR_imputed",f.lit(None))
+    abtDf = abtDf.withColumn("Sales_NSR_imputed",
+                        f.coalesce(
+                                    f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double"),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC","CUST_CDMD_AREA")),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
+                                    f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
+                        ))
+    abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed']) 
+
+    abtDf = abtDf.select(INCLUDE_COLS_LIST) 
+
+    #Get BU latest processed file 
+    latestFileName = get_latest_modified_file_from_directory(COUNTRY_INPUT_DATA_DIRECTORY).rsplit("_",1).pop(0)
+    print(f"This is the filepath:{latestFileName}")
+    # Load BU data to a pyspark.DataFrame
+    previousAbtDf =  spark.read.option("header", "true").option("sep", ",").csv(latestFileName)
+
+    previousAbtDf = previousAbtDf.withColumn('pardt', f.lit('20220512'))
+    newAbtDf = abtDf.join(previousAbtDf, on='CUSTOMER', how = 'left_anti')
+
+
+    pardt=datetime.now().strftime("%Y%m%d")
+    newAbtDf = newAbtDf.withColumn('pardt', f.lit(pardt))
+    allAbtDf = previousAbtDf.union(newAbtDf)
+
+    partition_date=datetime.now().strftime("%Y%m%d_%H%M%S")
+    #TODO Fix output save file path
+    allAbtDf.write.csv(f"/mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv", header=True)
