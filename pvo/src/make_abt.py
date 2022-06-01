@@ -1,6 +1,3 @@
-# Import other project dependencies
-from skeleton import Source 
-
 # Import Python Pkgs
 import pandas as pd
 import pyspark.sql.functions as f
@@ -19,7 +16,12 @@ from pathlib import Path
 from pyspark.sql.window import Window
 from pyspark.sql import DataFrame
 from typing import List 
-from omegaconf import DictConfig
+from omegaconf import DictConfig 
+
+# Import other project dependencies
+from skeleton import Source 
+from utils.datalake_utils import get_latest_modified_file_from_directory
+fri
 
 spark.sql("set spark.sql.execution.arrow.pyspark.fallback.enabled=false")
 
@@ -268,18 +270,19 @@ class Sales(Source):
         self._sparkDf = self._sparkDf.select(f.col("CUSTOMER"), f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg") ,f.col("Sales_NSR_rolling_xmonths_back_avg")).distinct()
 
 
-def make_analytical_base_table(customerDF:DataFrame, 
+def make_analytical_base_table(customerDf:DataFrame, 
                             coolersDf: DataFrame, salesDf:DataFrame,
-                            demographicsDf:DataFrame,INCLUDE_COLS_LIST:List[str] ):
+                            demographicsDf:DataFrame,INCLUDE_COLS_LIST:List[str], output_file_path:str, cc = COUNTRY_CODE):
+    demographicsDf = demographicsDf.drop("LONGITUDE","LATITUDE")
     
-    abtDf = customerDF.join(demographicsDf, on='CUSTOMER', how='left')\
+    abtDf = customerDf.join(demographicsDf, on='CUSTOMER', how='left')\
                     .join(coolersDf,  on='CUSTOMER', how='left')\
                     .join(salesDf, on='CUSTOMER', how='left')
 
     customerDf = customerDf.fillna("UNKNOWN", subset = [x for x in customerDf.columns if "CUST_" in x])
 
     to_numeric = [col for col in  demographicsDf.columns if col not in ["TAA_TC","urbanicity","CUSTOMER_DESC","LONGITUDE","LATITUDE","_BIC_CTRADE_CH","_BIC_CDMD_AREA","ta_size","geometry"]]
-    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in demographicsDf.columns ])
+    demographicsOfAllCustDf = abtDf.select([colName for colName in abtDf.columns if colName in to_numeric + ["LONGITUDE","LATITUDE",'_BIC_CDMD_AREA'] ])
 
 
     demographicsExcNanDf = demographicsOfAllCustDf.dropna(how='any')
@@ -332,7 +335,9 @@ def make_analytical_base_table(customerDF:DataFrame,
     abtDf = abtDf.drop(*[colName for colName in demographicsDf.columns if colName not in leaveColLst])
 
     # Remove prefix `imputed`
-    abtDf = abtDf.select(*[colName if 'imputed' in colName else colName for colName in abtDf.columns])
+    abtDf = abtDf.drop(*['imputed_TAA_TC','imputed_urbanicity','imputed_CUSTOMER_DESC','imputed__BIC_CTRADE_CH','imputed__BIC_CDMD_AREA','imputed_ta_size','imputed_geometry'])
+    abtDf = abtDf.select(*[f.col(colName).alias(colName.replace('imputed_', '')) if 'imputed' in colName else f.col(colName) for colName in abtDf.columns])
+
 
     abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",f.lit(None))
     abtDf = abtDf.withColumn("Sales_Volume_in_UC_imputed",
@@ -342,7 +347,7 @@ def make_analytical_base_table(customerDF:DataFrame,
                                     f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over( Window.partitionBy("CUST_CTRADE_CH_DESC")),
                                     f.avg(f.col("Sales_Volume_in_UC_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
                         ))
-
+    spark.sql("DROP TABLE harry.tempqq_abt")
     abtDf.write.mode("overwrite").saveAsTable("harry.temp_abt")
     abtDf = spark.sql("select * from harry.temp_abt")
 
@@ -355,7 +360,6 @@ def make_analytical_base_table(customerDF:DataFrame,
                                     f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
                         ))
     abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed']) 
-
     abtDf = abtDf.select(INCLUDE_COLS_LIST) 
 
     #Get BU latest processed file 
@@ -373,5 +377,5 @@ def make_analytical_base_table(customerDF:DataFrame,
     allAbtDf = previousAbtDf.union(newAbtDf)
 
     partition_date=datetime.now().strftime("%Y%m%d_%H%M%S")
-    #TODO Fix output save file path
-    allAbtDf.write.csv(f"/mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv", header=True)
+    
+    allAbtDf.write.csv(output_file_path.format(cc = cc, partition_date = partition_date), header=True)
