@@ -360,7 +360,7 @@ def make_analytical_base_table(customerDf:DataFrame,
                                     f.avg(f.col("Sales_NSR_rolling_xmonths_back_avg").cast("Double")).over(Window.partitionBy())
                         ))
     abtDf = abtDf.fillna(0, subset=['Sales_NSR_imputed', 'Sales_Volume_in_UC_imputed']) 
-    abtDf = abtDf.select(INCLUDE_COLS_LIST) 
+    abtDf = abtDf.select(*INCLUDE_COLS_LIST) 
 
     #Get BU latest processed file 
     latestFileName = get_latest_modified_file_from_directory(COUNTRY_INPUT_DATA_DIRECTORY).rsplit("_",1).pop(0)
