@@ -65,8 +65,6 @@ class Source(ABC):
         """
         pass 
 
-    
-
     def assemble(self)->DataFrame:
         self.load_data()
         self.filter_data()
@@ -98,7 +96,10 @@ class PvoModelling(ABC):
         print(f"This is the filepath:{latestFileName}")
         # Load BU data to a pyspark.DataFrame
         self.abtDf =  spark.read.option("header", "true").option("sep", ",").csv(latestFileName)
-        self.abtDf = self.abtDf.select([f.col(colName).cast("double").alias(colName) if colName in self.this_config['cast_to_double_list'] else f.col(colName) for colName in self.abtDf.columns ]) 
+        self.abtDf = self.abtDf.select([f.col(colName).cast("double").alias(colName) 
+                                        if colName in self.this_config['cast_to_double_list'] 
+                                        else f.col(colName) 
+                                        for colName in self.abtDf.columns ]) 
 
     @abstractmethod
     def feature_selection(self):pass 
