@@ -35,6 +35,7 @@ from sklearn.neighbors import BallTree, KDTree
 
 #Import other dependencies
 from utils.chi_square import ChiSquare
+from utils.model_benchmark import Benchmark
 from skeleton import PvoModelling 
 
 class PvoAtModelling(PvoModelling):
@@ -225,8 +226,8 @@ class PvoAtModelling(PvoModelling):
         metricTrain.set_data(predictionAndLabelsTrain)
         metricTrain.set_label_column("labelIndCol")
 
-# Get metrics and Confusion Matrix on Train
-metricsKpisTrainDf, confusionMatrixTrain =  metricTrain.get_classification_report(labelName)
+        # Get metrics and Confusion Matrix on Train
+        metricsKpisTrainDf, confusionMatrixTrain =  metricTrain.get_classification_report(labelName)
 
 
         
