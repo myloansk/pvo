@@ -36,7 +36,10 @@ from sklearn.neighbors import BallTree, KDTree
 #Import other dependencies
 from utils.chi_square import ChiSquare
 from utils.model_benchmark import Benchmark
-from skeleton import PvoModelling 
+from skeleton import PvoModelling ,PvoMachineLearningDAG
+
+
+
 
 class PvoAtModelling(PvoModelling):
     """
@@ -147,90 +150,13 @@ class PvoAtModelling(PvoModelling):
 
         
 
-    def calculate_performance_metrics(self)->None:
-        # Compute raw scores on the test set
-        idx_to_string = IndexToString(inputCol="prediction", outputCol="predictionLabel",labels=pipeline_model.stages[0].labels)
-        labelMapIndexDict = dict(zip(pipeline_model.stages[0].labels, [0, 1, 2, 3]))
-        predictions = predictions.filter(f.col("targetVar") != 'Platinum').cache()
-        predictionAndLabels = idx_to_string.transform(predictions).withColumn("just_probs",vector_to_array("probability").alias("probability")).select(
-                                            f.col("CUSTOMER"),
-                                            f.col("prediction"),
-                                            f.col("predictionLabel"),
-                                            f.col("targetVar").alias("labelCol"),
-                                            f.col("targetVarInd").alias("labelIndCol"),
-                                            f.col("just_probs").getItem(labelMapIndexDict['Iron']).alias('iron_prob'),
-                                            f.col("just_probs").getItem(labelMapIndexDict['Silver']).alias('silver_prob'),
-                                            f.col("just_probs").getItem(labelMapIndexDict['Bronze']).alias('bronze_prob'),
-                                            f.col("just_probs").getItem(labelMapIndexDict['Gold']).alias('gold_prob'),
-                                            f.lit('Test').alias('Holdout')
-                                            )                           
+    def calculate_performance_metrics(self, holdout:str)->None:
+        predictionAndLabels = self.mbtDf.filter(self.this_config['holdout_filter'].format(holdout = holdout)) 
 
-        resultDf = predictionAndLabels.select(
-                                            f.col("CUSTOMER"), 
-                                            f.col("prediction"),
-                                            f.col("predictionLabel").alias("PREDICTED_targetVar"),
-                                            f.col("labelCol"),
-                                            f.col("labelIndCol"),
-                                            f.col("iron_prob"),
-                                            f.col("bronze_prob"),
-                                            f.col("silver_prob"),
-                                            f.col("gold_prob"),
-                                            f.lit('Test').alias('Holdout')
-                                            )
+        metric = Benchmark(use='mllib')
+        metrics.set_data(predictionAndLabels)
+        metric.set_label_column("labelIndCol")
 
-        # Make predictions on Train.
-        predictionsTrain = pipeline_model.transform(trainDf)
-
-        # Compute raw scores on the test set
-        idx_to_string = IndexToString(inputCol="prediction", outputCol="predictionLabel",labels=pipeline_model.stages[0].labels)
-        predictionAndLabelsTrain = idx_to_string.transform(predictionsTrain)\
-                                                .withColumn("just_probs",vector_to_array("probability").alias("probability"))\
-                                                .select(
-                                                    f.col("CUSTOMER"),
-                                                    f.col("prediction"),
-                                                    f.col("predictionLabel"),
-                                                    f.col("targetVar").alias("labelCol"),
-                                                    f.col("targetVarInd").alias("labelIndCol"),
-                                                    f.col("just_probs").getItem(labelMapIndexDict['Iron']).alias('iron_prob'),
-                                                    f.col("just_probs").getItem(labelMapIndexDict['Silver']).alias('silver_prob'),
-                                                    f.col("just_probs").getItem(labelMapIndexDict['Bronze']).alias('bronze_prob'),
-                                                    f.col("just_probs").getItem(labelMapIndexDict['Gold']).alias('gold_prob'),
-                                                    f.lit('Train').alias('Holdout')
-                                                    ).cache()            
-        resultsTrainDf = predictionAndLabelsTrain.select(
-                                                f.col("CUSTOMER"), 
-                                                f.col("prediction"),
-                                                f.col("predictionLabel").alias("PREDICTED_targetVar"),
-                                                f.col("labelCol"),
-                                                f.col("labelIndCol"),
-                                                f.col("iron_prob"),
-                                                f.col("bronze_prob"),
-                                                f.col("silver_prob"),
-                                                f.col("gold_prob"),
-                                                f.lit('Train').alias('Holdout')
-                                                        )
-        appendedDf = predictionAndLabels.union(predictionAndLabelsTrain)
-
-        joinedDf = abtDf.join(appendedDf, 'CUSTOMER', how='left') 
-
-        labelName = pipeline_model.stages[0].labels
-
-        metricTrain = Benchmark(use='mllib')
-        metricTrain.set_data(predictionAndLabelsTrain)
-        metricTrain.set_label_column("labelIndCol")
-
-        # Get metrics and Confusion Matrix on Train
-        metricsKpisTrainDf, confusionMatrixTrain =  metricTrain.get_classification_report(labelName)
-
-        metricTrain = Benchmark(use='mllib')
-        metricTrain.set_data(predictionAndLabelsTrain)
-        metricTrain.set_label_column("labelIndCol")
-
-        # Get metrics and Confusion Matrix on Train
-        metricsKpisTrainDf, confusionMatrixTrain =  metricTrain.get_classification_report(labelName)
-
-
-        
 
     def save_results(self) -> None:
         return super().save_results() 
