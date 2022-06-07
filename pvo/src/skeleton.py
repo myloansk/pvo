@@ -7,9 +7,16 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from pyspark.sql.window import Window
 from functools import reduce
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame 
+from pyspark.ml.feature import (VectorAssembler, StringIndexer,IndexToString,
+                                VectorIndexer, OneHotEncoder, QuantileDiscretizer,
+                                Bucketizer,ChiSqSelector, UnivariateFeatureSelector)
+from pyspark.ml.classification import RandomForestClassifier, DecisionTreeClassifier, GBTClassifier
+from pyspark.ml.evaluation import ClusteringEvaluator, MulticlassClassificationEvaluator
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+from pyspark.ml import Pipeline, Transformer
 from sklearn.neighbors import BallTree, KDTree
-from typing import Dict 
+from typing import Dict, List, Any
 from utils import get_latest_modified_file_from_directory
 
 spark.sql("set spark.sql.execution.arrow.pyspark.fallback.enabled=false")
@@ -70,7 +77,59 @@ class Source(ABC):
         self.filter_data()
         self.feature_engineering()
         
-        return self
+        return self 
+
+class PvoMachineLearningDAG(ABC):
+    def __init__(self, parsedConfig:Dict) -> None:
+        self.config = parsedConfig
+        self.stages = {} 
+
+    def to_indexer(self, categicalCols:List[str] = None)->None:
+        if categicalCols is None:
+            self.stages['label_indexer'] = [StringIndexer(inputCol=self.this_config['label_indexer']["targetVar"], outputCol=self.this_config['label_indexer']["targetVarInd"])]
+        self.stages['string_indexer'] = [ StringIndexer(inputCol=c, outputCol=f"{c}_indexed", handleInvalid="keep") for c in categicalCols ]
+
+    def to_encode(self)->None:
+        self.stages['one_hot_encode'] = [ OneHotEncoder(inputCol=indexer.getOutputCol(), outputCol=f"{indexer.getOutputCol()}_encoded", dropLast=False) for indexer in self.stages['string_indexer'] ]
+
+    def to_vector(self, continuousCols:List[str])->None:
+        self.stages['assembler'] = [VectorAssembler(inputCols=[encoder.getOutputCol() for encoder in  self.stages['one_hot_encode'] ] + continuousCols, outputCol="features",handleInvalid="skip")]
+
+
+    @abstractmethod 
+    def model(self):
+        # Random Forest-Model
+        rf = RandomForestClassifier(labelCol="targetVarInd", featuresCol="features",seed=123)
+
+        paramGrid = (
+                    ParamGridBuilder()
+                    .addGrid(rf.numTrees, self.this_config['num_of_trees'])
+                    .addGrid(rf.maxDepth, self.this_config['max_depth'])
+                    .addGrid(rf.maxBins,  self.this_config['max_bins'])
+                    .build()
+                )
+
+        evaluator_accuracy = MulticlassClassificationEvaluator(
+                labelCol="targetVarInd", metricName="accuracy"
+            )
+        crossval = CrossValidator(
+            estimator=rf,
+            estimatorParamMaps=paramGrid,
+            evaluator=evaluator_accuracy,
+            numFolds=5,
+            seed=21,
+        )
+        self.stages['crossval'] = [crossval]
+
+
+    def assemble(self, categicalCols:List[str], continuousCols:List[str]):
+        self.to_indexer()
+        self.to_indexer(categicalCols)
+        self.to_encode()
+        self.to_vector(continuousCols)
+        
+        return Pipeline(stages= self.stages['label_indexer'] + self.stages['string_indexer']  +  self.stages['one_hot_encode'] + self.stages['assembler'] +  self.stages['crossval'])
+
 
 
 class PvoModelling(ABC):
