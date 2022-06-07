@@ -52,7 +52,10 @@ class PvoAtModelling(PvoModelling):
     :type Source: class
     """
     def __init__(self, configParsedDict)->None: 
-        self.abtDf:DataFrame=None 
+        self.abtDf:DataFrame = None 
+        self.mbtDf:DataFrame = None
+        self.categoricalCols:List[str] = None
+        self.continuousCols:List[str] = None
         self.this_config = configParsedDict
         
     def load_abt_data(self):
@@ -94,59 +97,50 @@ class PvoAtModelling(PvoModelling):
         dataDf = dataDf.withColumnRenamed('CUST_CCAF_GROUP','targetVar')
 
 
-    def modelling(self) -> None:
+    def modelling(self):
         """
-        _summary_
-
-        _extended_summary_
+        Instantiates a cchbc core class for transforming to ready to consume data by ML algorithm 
+        and subsquently fitting a ML model
+        Finally, wraps up results to modelling base table
         """
-        # Label Indexer
-        labelIndexer = StringIndexer(inputCol="targetVar", outputCol="targetVarInd")
 
-        # Indexers
-        indexers = [ StringIndexer(inputCol=c, outputCol=f"{c}_indexed", handleInvalid="keep") for c in categoricalCols ]
-
-        # Encoders
-        encoders = [ OneHotEncoder(inputCol=indexer.getOutputCol(), outputCol=f"{indexer.getOutputCol()}_encoded", dropLast=False) for indexer in indexers ]
-
-        # Assembler
-        assembler = VectorAssembler(inputCols=[encoder.getOutputCol() for encoder in encoders] + continuousCols, outputCol="features",handleInvalid="skip")
-
-        # Random Forest-Model
-        rf = RandomForestClassifier(labelCol="targetVarInd", featuresCol="features",seed=123)
-
-        paramGrid = (
-                    ParamGridBuilder()
-                    .addGrid(rf.numTrees, [10,15,20,25])
-                    .addGrid(rf.maxDepth,[12,14,16,18,20])
-                    .addGrid(rf.maxBins, [12,14,16,18,20])
-                    .build()
-                )
-
-
-
-        evaluator_accuracy = MulticlassClassificationEvaluator(
-                labelCol="targetVarInd", metricName="accuracy"
-            )
-
-        crossval = CrossValidator(
-            estimator=rf,
-            estimatorParamMaps=paramGrid,
-            evaluator=evaluator_accuracy,
-            numFolds=5,
-            seed=21,
-        )
         # Split train-test
-        (trainDf, testDf) = stratified_split_train_test(dataDf, frac=0.8, label="targetVar", join_on="CUSTOMER")
+        (trainDf, testDf) = stratified_split_train_test(self.abtDf, frac=self.this_config['modelling']['sampling'], label="targetVar", join_on="CUSTOMER")
 
         # Pipeline  
-        pipeline = Pipeline(stages= [labelIndexer] + indexers + encoders + [assembler] +  [crossval])
+        graph = PvoMachineLearningDAG(self.this_config['modelling'])
+        pipeline = graph.assemble(self.categoricalCols, self.continuousCols)
+        #pipeline = Pipeline(stages= [labelIndexer] + indexers + encoders + [assembler] +  [crossval])
 
         # Train model.  This also runs the indexers.
         pipeline_model = pipeline.fit(trainDf)
+        #pipeline_model = pipeline.fit(trainDf)
 
         # Make predictions.
-        predictions = pipeline_model.transform(testDf)
+        self.predictions = pipeline_model.transform(testDf)
+        
+        # Make predictions on Train.
+        self.predictionsTrain = pipeline_model.transform(trainDf)
+        
+        idx_to_string = IndexToString(inputCol="prediction", outputCol="predictionLabel",labels=pipeline_model.stages[0].labels)
+        labelMapIndexDict = dict(zip(pipeline_model.stages[0].labels, self.this_config['modelling']['target_variable_mapping']))
+        
+        self.predictions = predictions.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
+        self.predictionsTrain = predictionsTrain.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
+    
+        appendedTempDf = self.predictionAndLabels.union(self.predictionAndLabelsTrain)
+        appendedTempDf = idx_to_string.transform(appendedTempDf)\
+                                    .withColumn("just_probs",vector_to_array("probability").alias("probability"))\
+                                    .select(f.col(colName).alias(aliasName) if colName != 'just_probs' 
+                                            else f.col(colName).getItem(labelMapIndexDict[colName]).alias(aliasName) for aliasName, colName in self.this_config['modelling']['output_column_map'].items())
+                        
+        
+        self.mbtDf = self.abtDf.join(appendedTempDf, 'CUSTOMER', how='left') 
+        
+        idx_to_string = IndexToString(inputCol="prediction", outputCol="predictionLabel",labels=pipeline_model.stages[0].labels)
+        labelMapIndexDict = dict(zip(pipeline_model.stages[0].labels, self.this_config['modelling']['target_variable_mapping']))
+        
+        return self
 
         
 
