@@ -1,0 +1,84 @@
+customer_raw_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/raw/CA_0CUS03_Customer/{CAPS_CC}_0CUS03/
+GLOBAL_CUST_HIER2_LIST: 
+  - 'KA'
+  - 'NK'
+GLOBAL_ORDER_BLOCK_LIST:
+  - 'CW'
+  - 'F'
+  - 'I'
+  -  \#\
+  - 'C'
+  - 'TS'
+  - 'PR'
+  - 'NR'
+  - 'VF'
+CUST_TRAD_CHANNEL_NOT_INVOLVED_CODES:
+  - '036'
+  - '099'
+filtering_criteria: 
+  - (SALESORG IN ({salesOrgLst})) 
+  - (ACCNT_GRP IN ({globalAccountGroupList}))
+  - (CUST_HIE02  IN ( 'KA', 'NK'))
+  - (
+      ( _BIC_CSUP_CUST IN ('CW', 'F', 'I', '#', 'C', 'TS', 'PR', 'NR', 'VF')) or  
+      ( _BIC_CSUP_CUST IS NULL)
+    )                                                  
+  - (_BIC_CTRADE_CH NOT IN ({CUST_TRAD_CHANNEL_NOT_INVOLVED_CODES}))
+  - (ERDAT  <= {threeMonthsBackDate})
+renameLst:
+  _BIC_CTRADE_CH: CUST_CTRADE_CH
+  CTRADE_CH_DESC: CUST_CTRADE_CH_DESC
+  _BIC_CSUB_TRAD: CUST_CSUB_TRAD
+  CSUB_TRAD_DESC: CUST_CSUB_TRAD_DESC 
+  _BIC_CDMD_AREA: CUST_CDMD_AREA
+  CDMD_AREA_DESC: CUST_CDMD_AREA_DESC
+  POSTAL_CD: POSTAL_CODE
+  _BIC_CSUP_CUST: ORDER_BLOCK_ID
+CUST_ROUTED:
+  input: 
+      - ORDER_BLOCK_ID
+  tranformation:
+    IF('{field01}'=='NR', 0 ,1 )
+second_digit_ccaf:
+  input:
+    - _BIC_C_CCAF
+  tranformation:
+    substring(CAST({field01} AS string), 2, 1)
+CUST_CCAF_GROUP:
+  input:
+    - second_digit_ccaf
+  tranformation:
+    case 
+    WHEN {field01}=='1' THEN 'Platinum'
+    WHEN {field01}=='2' THEN 'Gold'
+    WHEN {field01}=='3' THEN 'Silver'
+    WHEN {field01}=='4' THEN 'Bronze'
+    WHEN {field01}=='5' THEN 'Iron'
+    ELSE 'Other'
+    END 
+LONGITUDE:
+  input:
+    LONGITUDE
+  tranformation: 
+    CAST({field01} AS DOUBLE)
+LATITUDE:
+  input:
+    LATITUDE
+  tranformation: 
+    CAST({field01} AS DOUBLE)
+customer_selected_columns:
+  - CUSTOMER
+  - CUST_CTRADE_CH
+  - CUST_CTRADE_CH_DESC
+  - CUST_CSUB_TRAD
+  - CUST_CSUB_TRAD_DESC
+  - CUST_GRP4
+  - CUST_GRP4_DESC
+  - CUST_CDMD_AREA
+  - CUST_CDMD_AREA_DESC
+  - CUST_ROUTED
+  - CUST_CCAF_GROUP
+  - POSTAL_CODE
+  - LONGITUDE
+  - LATITUDE
+

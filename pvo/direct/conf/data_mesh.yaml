@@ -1,0 +1,153 @@
+data_sources:
+  Customer_MD:
+    source: cch_bw
+    dm: md
+    filepath: ca_0_cus03_customer
+  Trade_Channel: 
+    source: cch_bw
+    dm: md
+    filepath: ca_ctrc01_trade_channel
+  Material_MD: 
+    source: cch_bw
+    dm: md
+    filepath: ca_0_mat03_material
+  MATERIAL_2: 
+    source: cch_bw
+    dm: md
+    filepath: ca_matsv1_material
+  Holiday_Calendar:
+    source: cch_bw
+    dm: md
+    filepath: ca_holcal_holiday_calendar
+  SKU_Conversion: 
+    source: cch_bw
+    dm: md
+    filepath: ca_mm_09_sku_conversion
+  CDE_Customer_Coverage": 
+    source: cch_bw
+    dm: md
+    filepath: ca_cam015_cde_doors
+  CDE_Door_Health: 
+    source: cch_bw
+    dm: md
+    filepath: ca_cam124
+  Strike_Rate: 
+    source: cch_bw
+    dm: md
+    filepath: cafsm0491_visit_order_strike_rate
+  Price_List: 
+    source: cch_bw
+    dm: md
+    filepath: ca_co012_price_list
+  Sales_DI : 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm003_sales_direct_indirect
+  call_center : 
+    source: cch_bw
+    dm: md
+    filepath: ca_sd_11_m_sales_combined
+  Suggestions_Orders : 
+    source: cch_bw
+    dm: md
+    filepath: ca_qu_16_m_suggested_orders_compliance
+  weather_future_long_range: 
+    source: weather
+    dm: trend
+    filepath: future_long_range
+  weather_future_short_range: 
+    source: weather
+    dm: trend
+    filepath: future_short_range
+  weather_history_long_range: 
+    source: weather
+    dm: trend
+    filepath: history_long_range
+  weather_history_short_range: 
+    source: weather
+    dm: trend
+    filepath: history_short_range
+  station_loc_md : 
+    source: weather
+    dm: trend
+    filepath: station_loc_md
+  fac_calender : 
+    source: cch_bw
+    dm: md
+    filepath:  ca_faccal_calendar
+  Customer_Visit_Data: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm044_visit_frequency
+  CRM_Activities: 
+    source: cch_bw
+    dm: md
+    filepath: ca_crm01_m_visits
+  CDE_Door_Openings: 
+    source: cch_bw
+    dm: md
+    filepath: ca_cam123_door_openings
+  RED_Availability: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm117_red_availability
+  Red_IndexTd: 
+    source: cch_bw
+    dm: md
+    filepath: ca_red003_red_index_td
+  RED_Index: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm05_n_red_index
+  RED_Cooler: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm121_red_coolers
+  RED_Displays: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm118_red_displays
+  RED_Index_Benchmark: 
+    source: cch_bw
+    dm: md
+    filepath: ca_fsm110_red_index_benchmark
+  demographic: 
+    source: trade_area_analysis
+    dm: {cc}
+    filepath: 
+  COPA : 
+    source: cch_bw
+    dm: fm
+    filepath: ca_pa_200_copa_full
+  Customer_Payment:
+    source: cch_bw
+    dm: fm
+    filepath: ca_cm015_customer_payment_history
+  sellout_dunhumby_fact_data: 
+    source: sellout
+    dm: ${cc}
+    filepath: 
+  sellout_dunhumby_summary": 
+    source: sellout
+    dm: ${cc}
+    filepath: 
+  sellout_eyc_coke_data": 
+    source: sellout
+    dm: ${cc}
+    filepath: 
+  sellout_eyc_summary": 
+    source: sellout
+    dm: ${cc}
+    filepath: 
+  sellout_talysis_aplegreen": 
+    source: sellout
+    dm: ${cc}
+    filepath:
+  sellout_talysis_bwg": 
+    source: sellout
+    dm: ${cc}
+    filepath: ca_cm015_customer_payment_history
+  sellout_talysis_summary": 
+    source: sellout
+    dm: ${cc}
+    filepath:

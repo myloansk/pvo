@@ -1,0 +1,22 @@
+coolers:
+  filepath: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/mtc/curated/CA_CAM015_CDE_Doors/{CAPS_CC}_CAM015/COMP_CODE={companyCode}/
+  calendar_file_path: abfss://cchbc@cchbcaadls2prod.dfs.core.windows.net/sources/ca/cch_bw/md/raw/CA_FACCAL_Calendar/CA_FACCAL/Calendar_CCH.csv
+  selected_columns_list:
+    - CUSTOMER AS CUSTOMER 
+    - EQUIPMENT AS EQUIPMENT 
+    - CAST(FISCPER AS INTEGER) AS FISCPER  
+    - CAST(CUSTOMERS_WITH_COOLERS AS INTEGER) AS CUSTOMER_WITH_COOLERS 
+    - DF_STATUS_D 
+    - CAST(ACTUAL_DOORS AS decimal(38,1)) AS ACTUAL_DOORS
+  calendar_selected_columns: 
+    - CALDAY 
+    - FISCPER 
+  filtering_condition:
+    - "(CUSTOMERS_WITH_COOLERS !=0)" 
+    - "(DF_STATUS_D =='placed') "
+    - "(CAST(ACTUAL_DOORS AS DOUBLE) >0)"
+    - "(FISCPER=={periodLatest})" 
+  output_selected_column_list:
+    - CUSTOMER
+    - EQUIPMENT
+    - ACTUAL_DOORS   

@@ -1,0 +1,100 @@
+defaults:
+  - coolers: at_coolers
+  - customer: at_customer
+  - demographics: at_demographics 
+  - sales: at_sales 
+output_filepath: /mnt/datalake/development/mylonas/pvo/data/abt/{cc}/output/{cc}_abt_{partition_date}.csv
+bu:
+  at:
+    company_code: 
+    -  0526 
+    sales_org:
+    -  1100 
+    abt_col_list:
+      - CUSTOMER
+      - LONGITUDE
+      - LATITUDE
+      - CUST_CTRADE_CH
+      - CUST_CTRADE_CH_DESC
+      - TAA_TC
+      - CUST_CSUB_TRAD
+      - CUST_CSUB_TRAD_DESC
+      - CUST_GRP4
+      - CUST_GRP4_DESC
+      - CUST_CDMD_AREA
+      - CUST_CDMD_AREA_DESC
+      - CUST_ROUTED
+      - CUST_CCAF_GROUP
+      - POSTAL_CODE
+      - urbanicity
+      - di_pc_mean
+      - wvce_01_pc
+      - wvce_02_pc
+      - WVSEG_A_mean  
+      - WVSEG_B_mean  
+      - WVSEG_C_mean  
+      - WVSEG_D_mean  
+      - WVSEG_E_mean  
+      - WVSEG_F_mean  
+      - WVSEG_G_mean  
+      - WVSEG_H_mean  
+      - WVSEG_I_mean  
+      - WVSEG_J_mean  
+      - WVSEG_U_mean  
+      - monthly_traffic_avg_mean  
+      - Season_traffic_perc_diff  
+      - Weekend_traffic_perc_diff  
+      - TF_WINTER  
+      - TF_SUMMER  
+      - Percentage_monthly_traffic_morning_avg_mean  
+      - Percentage_monthly_traffic_afternoon_avg_mean  
+      - Percentage_monthly_traffic_evening_avg_mean  
+      - Percentage_monthly_traffic_night_avg_mean  
+      - pop_sum  
+      - hh_sum  
+      - ta_size  
+      - di_ci_mean  
+      - di_mio_sum  
+      - wvce_01_sum  
+      - wvce_02_sum   
+      - unempl_sum  
+      - population_density  
+      - competitor_count_density  
+      - Percentage_age_t0014_sum  
+      - Percentage_age_t1529_sum  
+      - Percentage_age_t3044_sum  
+      - Percentage_age_t4559_sum  
+      - Percentage_age_t60pl_sum  
+      - monthly_proportion_residents_avg_mean  
+      - monthly_proportion_workers_avg_mean  
+      - monthly_proportion_others_avg_mean  
+      - monthly_proportion_same_state_avg_mean  
+      - monthly_proportion_other_state_avg_mean  
+      - monthly_proportion_unknown_avg_mean  
+      - commercial_area_poi  
+      - industrial_area_poi  
+      - park_area_poi  
+      - residential_area_poi  
+      - retail_area_poi  
+      - pofw_poi  
+      - pofw_christian_poi  
+      - pofw_muslim_poi  
+      - parking_poi  
+      - transport_poi  
+      - accomodation_poi  
+      - catering_poi  
+      - education_school_poi  
+      - education_university_poi  
+      - health_poi  
+      - leasure_poi  
+      - outdoor_poi  
+      - public_poi  
+      - shopping_poi  
+      - sports_poi  
+      - tourism_poi  
+      - outlet_count  
+      - competitor_count  
+      - COOLER_DOORS_SUM  
+      - COOLER_EQUIP_COUNT  
+      - Sales_NSR_imputed  
+      - Sales_Volume_in_UC_imputed        

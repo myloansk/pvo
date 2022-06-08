@@ -1,0 +1,60 @@
+demograpchics:
+  filepath: adl://cchbcaalabchg0059616dls.azuredatalakestore.net/development/test_taa/{cc}/taa_output_{cc}.csv
+  features:
+    age_group_column_list:
+      - age_t0014_sum
+      - age_t1529_sum
+      - age_t3044_sum
+      - age_t4559_sum
+      - age_t60pl_sum
+    traffic_hours:
+      - monthly_traffic_morning_avg_mean
+      - monthly_traffic_afternoon_avg_mean
+      - monthly_traffic_evening_avg_mean
+      - monthly_traffic_night_avg_mean
+    wvce_01_pc:
+        input:  
+          - wvce_01_sum
+          - pop_sum
+        transformation: "{field01}/{field02}"
+    wvce_02_pc:
+        input:
+          - wvce_02_sum
+          - pop_sum 
+        tranformation: "{field01}/{field02}"
+    TF_WINTER:
+      input:
+          - monthly_traffic_2021_12_mean
+          - monthly_traffic_2021_1_mean
+          - monthly_traffic_2021_2_mean
+      tranformation: "{field01} + {field02} + {field03}/3"
+    TF_SUMMER:
+      input:
+      - monthly_traffic_2021_6_mean
+      - monthly_traffic_2021_7_mean
+      - monthly_traffic_2021_8_mean
+      tranformation: "{field01} + {field02} + {field03}/3"
+    Weekend_traffic_perc_diff: 
+      input:
+        - monthly_traffic_weekend_avg_mean
+        - monthly_traffic_weekday_avg_mean
+      tranformation:
+        coalesce(round(({field01} -{field02})/{field02},2), 0)
+    Season_traffic_perc_diff:
+      input:
+        - TF_SUMMER
+        - TF_WINTER
+      transformation:
+        coalesce(round(({field01} - {field02})/{field02},2), 0)
+    population_density: 
+      input:
+        - pop_sum
+        - ta_size
+      transformation: 
+        "{population}/( 3.14 * {trade_area_size} * {trade_area_size})"
+    competitor_count_density: 
+      input:
+        - competitor_count
+        - ta_size
+      transformation:
+        competitor_count/( 3.14 * ta_size * ta_size)
