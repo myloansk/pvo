@@ -47,7 +47,7 @@ class ILayerTwo(ABC):
     def customer_visits(self):pass 
 
     @abstractmethod
-    def customer_coverage(self);pass 
+    def customer_coverage(self):pass 
 
     @abstractmethod
     def customer_door_openings(self):pass 
@@ -70,7 +70,7 @@ class ILayerTwo(ABC):
     @abstractmethod
     def copa(self):pass 
 
-    
+
 
 
 class RuLayerTwo(ILayerTwo):pass 
