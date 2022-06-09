@@ -4,6 +4,25 @@ from typing import Any, Dict, List
 
 class LayerThree(ABC):
 
+    __cc:str = None
+    __config:Dict = None
+
+    @property
+    def cc(self)->str:
+        return self.__cc 
+
+    @cc.setter
+    def cc(self, cc:str)->None:
+        self.__cc = cc 
+
+    @property
+    def config(self)->Dict: 
+        return self.__config 
+
+    @config.setter
+    def config(self, configParsed:Dict)->None:
+        self.__config = configParsed 
+
     def load_customer_md(self)->None:pass 
 
     @abstractmethod
