@@ -1,0 +1,14 @@
+defaults:
+  - sources: sources
+  - countries: internal_mapping
+  - app: application_details
+db_name_one: db_prod_{APP_NAME}_{DENG}_l1
+db_name_two: db_prod_{APP_NAME}_{DENG}_l2
+db_name_three: db_prod_{APP_NAME}_{DENG}_l3
+adl_path_zero: /ACN/DataMesh/DE/L1/{CAPS_CC}/
+adl_path_one: /ACN/DataMesh/DE/L1/CA/
+adl_path_two: /ACN/DataMesh/DE/L2/{CAPS_CC}/ 
+adl_path_udm: /ACN/DataMesh/DE/UDM/{CAPS_CC}/ 
+
+
+
