@@ -125,8 +125,8 @@ class PvoAtModelling(PvoModelling):
         idx_to_string = IndexToString(inputCol="prediction", outputCol="predictionLabel",labels=pipeline_model.stages[0].labels)
         labelMapIndexDict = dict(zip(pipeline_model.stages[0].labels, self.this_config['modelling']['target_variable_mapping']))
         
-        self.predictions = predictions.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
-        self.predictionsTrain = predictionsTrain.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
+        self.predictions = self.predictions.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
+        self.predictionsTrain = self.predictionsTrain.filter(f.col("targetVar") != 'Platinum').withColumn('Holdout',f.lit('Test'))
     
         appendedTempDf = self.predictionAndLabels.union(self.predictionAndLabelsTrain)
         appendedTempDf = idx_to_string.transform(appendedTempDf)\
